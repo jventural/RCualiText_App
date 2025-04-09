@@ -34,7 +34,7 @@ leer_archivo <- function(archivo) {
 # Interfaz de Usuario (UI)
 # ========================================
 ui <- fluidPage(
-  theme = shinytheme("readable"),  # Se utiliza un tema moderno (flatly)
+  theme = shinytheme("flatly"),  # Se utiliza un tema moderno (flatly)
   shinyjs::useShinyjs(),
   tags$head(
     # Estilos CSS personalizados para mejorar la apariencia general
@@ -79,7 +79,7 @@ ui <- fluidPage(
              sidebarLayout(
                sidebarPanel(
                  textInput("new_categoria", "Nueva categoría:", value = ""),
-                 colourpicker::colourInput("new_color", "Color:", value = "#F0F0F0"),
+                 colourpicker::colourInput("new_color", "Color:", value = "#FFFF00"),
                  actionButton("addOrUpdateCategoria", "Agregar/Actualizar Categoría"),
                  actionButton("deleteCategoria", "Borrar Categoría")
                ),
@@ -253,7 +253,7 @@ server <- function(input, output, session) {
     DT::datatable(
       rv$categoriasDF,
       selection = "single",
-      options = list(pageLength = 5),
+      options = list(pageLength = 10),
       rownames = FALSE
     )
   })
@@ -306,7 +306,7 @@ server <- function(input, output, session) {
     DT::datatable(
       rv$familiasDF,
       selection = "single",
-      options = list(pageLength = 5),
+      options = list(pageLength = 10),
       rownames = FALSE
     )
   })
