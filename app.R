@@ -266,7 +266,8 @@ ui <- dashboardPage(
                   width = 12, title = "Acerca del programa", status = "primary", solidHeader = TRUE,
                   p("RCualiText es una aplicación para la codificación cualitativa de textos que permite cargar documentos (.txt y .docx), definir códigos y categorías, resaltar extractos de interés y visualizar frecuencias y redes de coocurrencia de códigos."),
                   p("Con RCualiText puedes gestionar de manera interactiva tu lista de códigos, agruparlos en categorías, exportar tus resaltados a Excel y analizar gráficamente tus datos cualitativos mediante gráficos de barras y redes de centralidad."),
-                  p("**Autor: Dr. José Ventura-León**")
+                  p(strong("Autor: Dr. José Ventura-León"))
+                  
                 )
               )
       )
