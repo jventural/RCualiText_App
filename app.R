@@ -42,7 +42,7 @@ leer_archivo <- function(archivo) {
 }
 
 # ========================================
-# Funciones de análisis
+# Funciones de análisis y visualización
 # ========================================
 plot_codigos <- function(df, fill = TRUE, code_colors = NULL) {
   reorder_size <- function(x) factor(x, levels = names(sort(table(x))))
@@ -91,23 +91,16 @@ plot_network_and_centrality <- function(df, code_colors = NULL) {
       betweenness = centrality_betweenness()
     )
   
-  # 1) red
   net_plot <- ggraph(graph_tbl, layout="fr") +
     geom_edge_link(aes(width=weight), color="gray80", alpha=0.6) +
     scale_edge_width(range = c(0.5, 3), guide = "none") +
     geom_node_point(aes(fill=full_name), shape=21, size=12, color="white") +
-    {
-      if (!is.null(code_colors)) {
-        scale_fill_manual(name="Código", values=code_colors)
-      } else {
-        scale_fill_brewer("Código", palette="Set3")
-      }
-    } +
+    { if (!is.null(code_colors)) scale_fill_manual(name="Código", values=code_colors)
+      else scale_fill_brewer("Código", palette="Set3") } +
     geom_node_text(aes(label=label_abbr), size=3) +
     theme_void() +
     theme(legend.position="right")
   
-  # 2) centralidad
   cents <- graph_tbl %>%
     as_tibble() %>%
     select(full_name, strength) %>%
@@ -124,7 +117,6 @@ plot_network_and_centrality <- function(df, code_colors = NULL) {
     labs(y = "Centralidad (z-score)", x = "Código") +
     theme_bw()
   
-  # 3) combinar
   combined <- net_plot + cent_plot +
     plot_layout(ncol=2, widths=c(3,1), guides="collect") &
     theme(legend.position="bottom")
@@ -147,106 +139,134 @@ ui <- dashboardPage(
       menuItem("Análisis",   tabName = "analisis",   icon = icon("project-diagram")),
       menuItem("Estado",     tabName = "estado",     icon = icon("save")),
       menuItem("Info",       tabName = "info",       icon = icon("info-circle"))
-    ), 
+    ),
     width = 260
   ),
   dashboardBody(
     theme = bs_theme(bootswatch = "flatly", base_font = font_google("Segoe UI")),
     useShinyjs(),
-    tags$head(tags$style(HTML("
-      .box { border-radius: 8px; }
-      .content-wrapper { background: #ecf0f5; }
-    "))),
+    tags$head(
+      tags$style(HTML("
+        .box { border-radius: 8px; }
+        .content-wrapper { background: #ecf0f5; }
+      "))
+    ),
+    tags$script(HTML("
+      document.addEventListener('mouseup', function(){
+        var txt = window.getSelection().toString();
+        if (txt.length > 0) {
+          Shiny.setInputValue('selectedText', txt);
+        }
+      });
+    ")),
     tabItems(
-      # Texto
+      # ---- Texto ----
       tabItem("texto",
               fluidRow(
-                box(width = 4, title = "Cargar Documento", status = "primary", solidHeader = TRUE, collapsible = TRUE,
-                    fileInput("archivo", "Sube .txt/.docx", multiple = TRUE, accept = c(".txt", ".docx")),
-                    selectInput("codigoTexto", "Selecciona Código", choices = NULL),
-                    fluidRow(
-                      column(6, actionBttn("prev_doc", "Anterior", style = "jelly", color = "primary")),
-                      column(6, actionBttn("next_doc", "Siguiente", style = "jelly", color = "primary"))
-                    ),
-                    textOutput("doc_info")
+                box(
+                  width = 4, title = "Cargar Documento", status = "primary", solidHeader = TRUE, collapsible = TRUE,
+                  fileInput("archivo", "Sube .txt/.docx", multiple = TRUE, accept = c(".txt", ".docx")),
+                  selectInput("codigoTexto", "Selecciona Código", choices = NULL),
+                  fluidRow(
+                    column(6, actionBttn("prev_doc", "Anterior", style = "jelly", color = "primary")),
+                    column(6, actionBttn("next_doc", "Siguiente", style = "jelly", color = "primary"))
+                  ),
+                  textOutput("doc_info")
                 ),
-                box(width = 8, title = "Visor de Texto", status = "info", solidHeader = TRUE,
-                    withSpinner(uiOutput("contenido"), type = 6)
+                box(
+                  width = 8, title = "Visor de Texto", status = "info", solidHeader = TRUE,
+                  withSpinner(
+                    div(
+                      style = "white-space: pre-wrap; font-family: 'Segoe UI'; line-height: 1.4;",
+                      uiOutput("contenido")
+                    ),
+                    type = 6
+                  )
                 )
               )
       ),
-      # Códigos
+      # ---- Códigos ----
       tabItem("codigos",
               fluidRow(
-                box(width = 4, title = "Nuevo / Editar Código", status = "warning", solidHeader = TRUE,
-                    textInput("new_codigo", "Código", value = ""),
-                    colourInput("new_color", "Color", value = "#FFFF00"),
-                    actionBttn("addOrUpdateCodigo", "Guardar", style = "bordered", color = "success"),
-                    actionBttn("deleteCodigo", "Borrar", style = "bordered", color = "danger")
+                box(
+                  width = 4, title = "Nuevo / Editar Código", status = "warning", solidHeader = TRUE,
+                  textInput("new_codigo", "Código", value = ""),
+                  colourInput("new_color", "Color", value = "#FFFF00"),
+                  actionBttn("addOrUpdateCodigo", "Guardar", style = "bordered", color = "success"),
+                  actionBttn("deleteCodigo",    "Borrar",  style = "bordered", color = "danger")
                 ),
-                box(width = 8, title = "Lista de Códigos", status = "warning", solidHeader = TRUE,
-                    DTOutput("tablaCodigos")
+                box(
+                  width = 8, title = "Lista de Códigos", status = "warning", solidHeader = TRUE,
+                  DTOutput("tablaCodigos")
                 )
               )
       ),
-      # Categorías
+      # ---- Categorías ----
       tabItem("categorias",
               fluidRow(
-                box(width = 4, title = "Nueva / Editar Categoría", status = "info", solidHeader = TRUE,
-                    textInput("new_categoria", "Categoría", value = ""),
-                    selectizeInput("codigos_for_categoria", "Códigos asociados", choices = NULL, multiple = TRUE),
-                    actionBttn("addOrUpdateCategoria", "Guardar", style = "bordered", color = "success"),
-                    actionBttn("deleteCategoria", "Borrar", style = "bordered", color = "danger")
+                box(
+                  width = 4, title = "Nueva / Editar Categoría", status = "info", solidHeader = TRUE,
+                  textInput("new_categoria", "Categoría", value = ""),
+                  selectizeInput("codigos_for_categoria", "Códigos asociados", choices = NULL, multiple = TRUE),
+                  actionBttn("addOrUpdateCategoria", "Guardar", style = "bordered", color = "success"),
+                  actionBttn("deleteCategoria",       "Borrar",  style = "bordered", color = "danger")
                 ),
-                box(width = 8, title = "Lista de Categorías", status = "info", solidHeader = TRUE,
-                    DTOutput("tablaCategorias")
+                box(
+                  width = 8, title = "Lista de Categorías", status = "info", solidHeader = TRUE,
+                  DTOutput("tablaCategorias")
                 )
               )
       ),
-      # Resaltes
+      # ---- Resaltes ----
       tabItem("resaltes",
               fluidRow(
-                box(width = 12, title = "Tabla de Resaltes", status = "danger", solidHeader = TRUE,
-                    downloadBttn("descarga", "Descargar XLSX", style = "gradient", color = "primary"),
-                    DTOutput("tablaResaltes") %>% withSpinner(type = 4)
+                box(
+                  width = 12, title = "Tabla de Resaltes", status = "danger", solidHeader = TRUE,
+                  downloadBttn("descarga", "Descargar XLSX", style = "gradient", color = "primary"),
+                  DTOutput("tablaResaltes") %>% withSpinner(type = 4)
                 )
               )
       ),
-      # Análisis
+      # ---- Análisis ----
       tabItem("analisis",
               fluidRow(
-                box(width = 3, title = "Opciones de Gráficos", status = "primary", solidHeader = TRUE, collapsible = TRUE,
-                    prettySwitch("fillToggle", "Fill por Categoría", value = TRUE, status = "info")
+                box(
+                  width = 3, title = "Opciones de Gráficos", status = "primary", solidHeader = TRUE, collapsible = TRUE,
+                  prettySwitch("fillToggle", "Fill por Categoría", value = TRUE, status = "info")
                 ),
-                box(width = 9, height = 600, title = "Frecuencias de Códigos", status = "primary", solidHeader = TRUE,
-                    plotlyOutput("plotCodigos") %>% withSpinner()
+                box(
+                  width = 9, height = 600, title = "Frecuencias de Códigos", status = "primary", solidHeader = TRUE,
+                  plotlyOutput("plotCodigos") %>% withSpinner()
                 )
               ),
               fluidRow(
-                box(width = 12, height = 600, title = "Red de Códigos y Centralidad", status = "primary", solidHeader = TRUE,
-                    plotOutput("plotRedCentralidad") %>% withSpinner()
+                box(
+                  width = 12, height = 600, title = "Red de Códigos y Centralidad", status = "primary", solidHeader = TRUE,
+                  plotOutput("plotRedCentralidad") %>% withSpinner()
                 )
               )
       ),
-      # Estado
+      # ---- Estado ----
       tabItem("estado",
               fluidRow(
-                box(width = 6, title = "Guardar Estado", status = "info", solidHeader = TRUE,
-                    downloadBttn("saveState", "Guardar .rds", style = "stretch", color = "warning")
+                box(
+                  width = 6, title = "Guardar Estado", status = "info", solidHeader = TRUE,
+                  downloadBttn("saveState", "Guardar .rds", style = "stretch", color = "warning")
                 ),
-                box(width = 6, title = "Cargar Estado", status = "info", solidHeader = TRUE,
-                    fileInput("loadState", "Selecciona .rds", accept = ".rds")
+                box(
+                  width = 6, title = "Cargar Estado", status = "info", solidHeader = TRUE,
+                  fileInput("loadState", "Selecciona .rds", accept = ".rds")
                 )
               )
       ),
-      # Info
+      # ---- Info ----
       tabItem("info",
               fluidRow(
-                box(width = 12, title = "Acerca del programa", status = "primary", solidHeader = TRUE,
-                    p("RCualiText es una aplicación para la codificación cualitativa de textos que permite cargar documentos (.txt y .docx), definir códigos y categorías, resaltar extractos de interés y visualizar frecuencias y redes de coocurrencia de códigos."),
-                    p("Con RCualiText puedes gestionar de manera interactiva tu lista de códigos, agruparlos en categorías, exportar tus resaltados a Excel y analizar gráficamente tus datos cualitativos mediante gráficos de barras y redes de centralidad."),
-                    p(strong("Autor: Dr. José Ventura-León"))
-                    
+                box(
+                  width = 12, title = "Acerca del programa", status = "primary", solidHeader = TRUE,
+                  p("RCualiText es una aplicación para la codificación cualitativa de textos que permite cargar documentos (.txt y .docx), definir códigos y categorías, resaltar extractos de interés y visualizar frecuencias y redes de coocurrencia de códigos."),
+                  p("Con RCualiText puedes gestionar de manera interactiva tu lista de códigos, agruparlos en categorías, exportar tus resaltados a Excel y analizar gráficamente tus datos cualitativos mediante gráficos de barras y redes de centralidad."),
+                  p("**Autor: Dr. José Ventura-León**")
                 )
               )
       )
@@ -254,27 +274,36 @@ ui <- dashboardPage(
   )
 )
 
-
 # ========================================
-# Servidor
+# SERVER
 # ========================================
 server <- function(input, output, session) {
   rv <- reactiveValues(
-    codigosDF    = tibble(Codigo=character(), Color=character()),
-    categoriasDF = tibble(Categoria=character(), Codigos=character()),
-    docs         = NULL, idx=0, texto="",
-    tabla        = tibble(Extracto=character(), Codigo=character(), Categoria=character(), Color=character(), Archivo=character())
+    codigosDF    = tibble(Codigo = character(), Color = character()),
+    categoriasDF = tibble(Categoria = character(), Codigos = character()),
+    docs         = NULL,
+    idx          = 0,
+    texto        = "",
+    tabla        = tibble(
+      Extracto  = character(),
+      Codigo    = character(),
+      Categoria = character(),
+      Color     = character(),
+      Archivo   = character()
+    )
   )
   
-  # helper colors
-  get_code_colors <- reactive(set_names(rv$codigosDF$Color, rv$codigosDF$Codigo))
+  get_code_colors <- reactive({
+    set_names(rv$codigosDF$Color, rv$codigosDF$Codigo)
+  })
   
-  # -- Códigos CRUD --
+  # CRUD códigos
   proxyCod <- dataTableProxy("tablaCodigos")
+  output$tablaCodigos <- renderDT(rv$codigosDF, selection = "single", options = list(pageLength = 5))
   observeEvent(input$tablaCodigos_rows_selected, {
     sel <- input$tablaCodigos_rows_selected; req(length(sel)==1)
-    updateTextInput(session, "new_codigo", value=rv$codigosDF$Codigo[sel])
-    updateColourInput(session, "new_color", value=rv$codigosDF$Color[sel])
+    updateTextInput(session, "new_codigo", value = rv$codigosDF$Codigo[sel])
+    updateColourInput(session, "new_color", value = rv$codigosDF$Color[sel])
   })
   observeEvent(input$addOrUpdateCodigo, {
     req(input$new_codigo)
@@ -285,101 +314,99 @@ server <- function(input, output, session) {
       df <- bind_rows(df, tibble(Codigo=input$new_codigo, Color=input$new_color))
     }
     rv$codigosDF <- df
-    updateSelectInput(session, "codigoTexto", choices=df$Codigo)
-    updateSelectizeInput(session, "codigos_for_categoria", choices=df$Codigo, server=TRUE)
-    replaceData(proxyCod, df, resetPaging=FALSE)
+    replaceData(proxyCod, df, resetPaging = FALSE)
+    updateSelectInput(session, "codigoTexto", choices = df$Codigo)
+    updateSelectizeInput(session, "codigos_for_categoria", choices = df$Codigo, server = TRUE)
   })
   observeEvent(input$deleteCodigo, {
     sel <- input$tablaCodigos_rows_selected; req(length(sel)==1)
-    df <- rv$codigosDF[-sel,]; rv$codigosDF <- df
-    updateSelectInput(session, "codigoTexto", choices=df$Codigo)
-    updateSelectizeInput(session, "codigos_for_categoria", choices=df$Codigo, server=TRUE)
-    replaceData(proxyCod, df, resetPaging=FALSE)
+    df <- rv$codigosDF[-sel, ]
+    rv$codigosDF <- df
+    replaceData(proxyCod, df, resetPaging = FALSE)
+    updateSelectInput(session, "codigoTexto", choices = df$Codigo)
+    updateSelectizeInput(session, "codigos_for_categoria", choices = df$Codigo, server = TRUE)
   })
-  output$tablaCodigos <- renderDT(rv$codigosDF, selection="single", options=list(pageLength=5))
   
-  # -- Categorías CRUD --
+  # CRUD categorías
   proxyCat <- dataTableProxy("tablaCategorias")
+  output$tablaCategorias <- renderDT(rv$categoriasDF, selection = "single", options = list(pageLength = 5))
   observeEvent(input$tablaCategorias_rows_selected, {
     sel <- input$tablaCategorias_rows_selected; req(length(sel)==1)
     cats <- str_split(rv$categoriasDF$Codigos[sel], ",\\s*")[[1]]
-    updateTextInput(session, "new_categoria", value=rv$categoriasDF$Categoria[sel])
-    updateSelectizeInput(session, "codigos_for_categoria", selected=cats)
+    updateTextInput(session, "new_categoria", value = rv$categoriasDF$Categoria[sel])
+    updateSelectizeInput(session, "codigos_for_categoria", selected = cats)
   })
   observeEvent(input$addOrUpdateCategoria, {
     req(input$new_categoria)
     df <- rv$categoriasDF
-    line <- tibble(Categoria=input$new_categoria,
-                   Codigos=paste(input$codigos_for_categoria, collapse=", "))
+    nueva <- tibble(Categoria=input$new_categoria, Codigos=paste(input$codigos_for_categoria, collapse=", "))
     if (input$new_categoria %in% df$Categoria) {
-      df <- df %>% filter(Categoria!=input$new_categoria) %>% bind_rows(line)
+      df <- df %>% filter(Categoria!=input$new_categoria) %>% bind_rows(nueva)
     } else {
-      df <- bind_rows(df, line)
+      df <- bind_rows(df, nueva)
     }
     rv$categoriasDF <- df
-    replaceData(proxyCat, df, resetPaging=FALSE)
+    replaceData(proxyCat, df, resetPaging = FALSE)
   })
   observeEvent(input$deleteCategoria, {
     sel <- input$tablaCategorias_rows_selected; req(length(sel)==1)
-    df <- rv$categoriasDF[-sel,]; rv$categoriasDF <- df
-    replaceData(proxyCat, df, resetPaging=FALSE)
+    df <- rv$categoriasDF[-sel, ]
+    rv$categoriasDF <- df
+    replaceData(proxyCat, df, resetPaging = FALSE)
   })
-  output$tablaCategorias <- renderDT(rv$categoriasDF, selection="single", options=list(pageLength=5))
   
-  # -- Documentos & Resaltado --
+  # Carga y navegación de documentos
   observeEvent(input$archivo, {
     files <- input$archivo
     docs <- map(seq_len(nrow(files)), ~{
-      txt <- leer_archivo(files[.,]); list(name=files$name[.], original=txt, modified=txt)
+      txt <- leer_archivo(files[., ])
+      list(name = files$name[.], original = txt, modified = txt)
     })
-    rv$docs <- docs; rv$idx <- 1; rv$texto <- docs[[1]]$modified
+    rv$docs  <- docs; rv$idx <- 1; rv$texto <- docs[[1]]$modified
     output$contenido <- renderUI(HTML(rv$texto))
   })
   observeEvent(input$prev_doc, {
-    req(rv$idx>1)
-    rv$idx   <- rv$idx - 1
-    rv$texto <- rv$docs[[rv$idx]]$modified
+    req(rv$idx > 1)
+    rv$idx <- rv$idx - 1; rv$texto <- rv$docs[[rv$idx]]$modified
     output$contenido <- renderUI(HTML(rv$texto))
   })
   observeEvent(input$next_doc, {
-    req(rv$idx<length(rv$docs))
-    rv$idx   <- rv$idx + 1
-    rv$texto <- rv$docs[[rv$idx]]$modified
+    req(rv$idx < length(rv$docs))
+    rv$idx <- rv$idx + 1; rv$texto <- rv$docs[[rv$idx]]$modified
     output$contenido <- renderUI(HTML(rv$texto))
   })
   output$doc_info <- renderText({
-    if (!is.null(rv$docs) && rv$idx > 0) {
+    if (!is.null(rv$docs) && rv$idx>0) {
       paste0("Documento ", rv$idx, " de ", length(rv$docs), ": ", rv$docs[[rv$idx]]$name)
     } else ""
   })
+  
+  # Resaltar texto
   observeEvent(input$selectedText, {
-    txt <- str_trim(input$selectedText)
-    req(txt != "", input$codigoTexto != "")
-    code    <- input$codigoTexto
-    col     <- get_code_colors()[code]
-    cat_sel <- rv$categoriasDF %>% 
-      filter(str_detect(Codigos, fixed(code))) %>% 
-      pull(Categoria) %>% first() %||% ""
+    txt <- str_trim(input$selectedText); req(txt!="", input$codigoTexto!="")
+    code <- input$codigoTexto; col <- get_code_colors()[code]
+    cat_sel <- rv$categoriasDF %>% filter(str_detect(Codigos, fixed(code))) %>% pull(Categoria) %>% first() %||% ""
     newrow <- tibble(Extracto=txt, Codigo=code, Categoria=cat_sel, Color=col, Archivo=rv$docs[[rv$idx]]$name)
     rv$tabla <- bind_rows(rv$tabla, newrow)
-    span     <- paste0("<span style='background:", col, ";'>", txt, "</span>")
-    rv$texto <- sub(txt, span, rv$texto, fixed=TRUE)
+    span_text <- paste0("<span style='background-color:", col, ";'>", txt, "</span>")
+    rv$texto <- sub(txt, span_text, rv$texto, fixed=TRUE)
     rv$docs[[rv$idx]]$modified <- rv$texto
     output$contenido <- renderUI(HTML(rv$texto))
-    runjs("window.getSelection().removeAllRanges();")
+    shinyjs::runjs("window.getSelection().removeAllRanges();")
   })
   
-  # -- Resaltes --
+  # Tabla de resaltados y descarga
   output$tablaResaltes <- renderDT(rv$tabla, options=list(pageLength=5))
   output$descarga <- downloadHandler(
     filename = function() paste0("resaltes-", Sys.Date(), ".xlsx"),
     content  = function(file) {
       wb <- createWorkbook(); addWorksheet(wb, "Resaltes")
-      writeData(wb, "Resaltes", rv$tabla); saveWorkbook(wb, file, overwrite=TRUE)
+      writeData(wb, "Resaltes", rv$tabla)
+      saveWorkbook(wb, file, overwrite=TRUE)
     }
   )
   
-  # -- Análisis --
+  # Gráficos de análisis
   output$plotCodigos <- renderPlotly({
     req(nrow(rv$tabla)>0)
     p <- plot_codigos(rv$tabla, fill=input$fillToggle, code_colors=get_code_colors())
@@ -390,7 +417,7 @@ server <- function(input, output, session) {
     plot_network_and_centrality(rv$tabla, code_colors=get_code_colors())$plot
   }, res=96)
   
-  # -- Estado --
+  # Guardar / cargar estado
   output$saveState <- downloadHandler(
     filename = function() paste0("estado_", Sys.Date(), ".rds"),
     content  = function(file) saveRDS(reactiveValuesToList(rv), file)
@@ -400,9 +427,9 @@ server <- function(input, output, session) {
     for (nm in names(est)) rv[[nm]] <- est[[nm]]
     updateSelectInput(session, "codigoTexto", choices=rv$codigosDF$Codigo)
     updateSelectizeInput(session, "codigos_for_categoria", choices=rv$codigosDF$Codigo, server=TRUE)
-    output$contenido <- renderUI(HTML(rv$texto))
-    replaceData(proxyCod, rv$codigosDF,     resetPaging=FALSE)
+    replaceData(proxyCod, rv$codigosDF, resetPaging=FALSE)
     replaceData(proxyCat, rv$categoriasDF, resetPaging=FALSE)
+    output$contenido <- renderUI(HTML(rv$texto))
   })
 }
 
