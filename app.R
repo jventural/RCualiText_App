@@ -140,16 +140,18 @@ ui <- dashboardPage(
   dashboardHeader(title = "RCualiText", titleWidth = 260),
   dashboardSidebar(
     sidebarMenu(
-      menuItem("Texto",      tabName="texto",      icon=icon("file-alt")),
-      menuItem("Códigos",    tabName="codigos",    icon=icon("tags")),
-      menuItem("Categorías", tabName="categorias", icon=icon("folder-open")),
-      menuItem("Resaltes",   tabName="resaltes",   icon=icon("highlighter")),
-      menuItem("Análisis",   tabName="analisis",   icon=icon("project-diagram")),
-      menuItem("Estado",     tabName="estado",     icon=icon("save"))
-    ), width=260
+      menuItem("Texto",      tabName = "texto",      icon = icon("file-alt")),
+      menuItem("Códigos",    tabName = "codigos",    icon = icon("tags")),
+      menuItem("Categorías", tabName = "categorias", icon = icon("folder-open")),
+      menuItem("Resaltes",   tabName = "resaltes",   icon = icon("highlighter")),
+      menuItem("Análisis",   tabName = "analisis",   icon = icon("project-diagram")),
+      menuItem("Estado",     tabName = "estado",     icon = icon("save")),
+      menuItem("Info",       tabName = "info",       icon = icon("info-circle"))
+    ), 
+    width = 260
   ),
   dashboardBody(
-    theme = bs_theme(bootswatch="flatly", base_font=font_google("Segoe UI")),
+    theme = bs_theme(bootswatch = "flatly", base_font = font_google("Segoe UI")),
     useShinyjs(),
     tags$head(tags$style(HTML("
       .box { border-radius: 8px; }
@@ -159,30 +161,30 @@ ui <- dashboardPage(
       # Texto
       tabItem("texto",
               fluidRow(
-                box(width=4, title="Cargar Documento", status="primary", solidHeader=TRUE, collapsible=TRUE,
-                    fileInput("archivo","Sube .txt/.docx", multiple=TRUE, accept=c(".txt",".docx")),
-                    selectInput("codigoTexto","Selecciona Código", choices=NULL),
+                box(width = 4, title = "Cargar Documento", status = "primary", solidHeader = TRUE, collapsible = TRUE,
+                    fileInput("archivo", "Sube .txt/.docx", multiple = TRUE, accept = c(".txt", ".docx")),
+                    selectInput("codigoTexto", "Selecciona Código", choices = NULL),
                     fluidRow(
-                      column(6, actionBttn("prev_doc","Anterior", style="jelly", color="primary")),
-                      column(6, actionBttn("next_doc","Siguiente", style="jelly", color="primary"))
+                      column(6, actionBttn("prev_doc", "Anterior", style = "jelly", color = "primary")),
+                      column(6, actionBttn("next_doc", "Siguiente", style = "jelly", color = "primary"))
                     ),
                     textOutput("doc_info")
                 ),
-                box(width=8, title="Visor de Texto", status="info", solidHeader=TRUE,
-                    withSpinner(uiOutput("contenido"), type=6)
+                box(width = 8, title = "Visor de Texto", status = "info", solidHeader = TRUE,
+                    withSpinner(uiOutput("contenido"), type = 6)
                 )
               )
       ),
       # Códigos
       tabItem("codigos",
               fluidRow(
-                box(width=4, title="Nuevo / Editar Código", status="warning", solidHeader=TRUE,
-                    textInput("new_codigo","Código", value=""),
-                    colourInput("new_color","Color", value="#FFFF00"),
-                    actionBttn("addOrUpdateCodigo","Guardar", style="bordered", color="success"),
-                    actionBttn("deleteCodigo","Borrar", style="bordered", color="danger")
+                box(width = 4, title = "Nuevo / Editar Código", status = "warning", solidHeader = TRUE,
+                    textInput("new_codigo", "Código", value = ""),
+                    colourInput("new_color", "Color", value = "#FFFF00"),
+                    actionBttn("addOrUpdateCodigo", "Guardar", style = "bordered", color = "success"),
+                    actionBttn("deleteCodigo", "Borrar", style = "bordered", color = "danger")
                 ),
-                box(width=8, title="Lista de Códigos", status="warning", solidHeader=TRUE,
+                box(width = 8, title = "Lista de Códigos", status = "warning", solidHeader = TRUE,
                     DTOutput("tablaCodigos")
                 )
               )
@@ -190,13 +192,13 @@ ui <- dashboardPage(
       # Categorías
       tabItem("categorias",
               fluidRow(
-                box(width=4, title="Nueva / Editar Categoría", status="info", solidHeader=TRUE,
-                    textInput("new_categoria","Categoría", value=""),
-                    selectizeInput("codigos_for_categoria","Códigos asociados", choices=NULL, multiple=TRUE),
-                    actionBttn("addOrUpdateCategoria","Guardar", style="bordered", color="success"),
-                    actionBttn("deleteCategoria","Borrar", style="bordered", color="danger")
+                box(width = 4, title = "Nueva / Editar Categoría", status = "info", solidHeader = TRUE,
+                    textInput("new_categoria", "Categoría", value = ""),
+                    selectizeInput("codigos_for_categoria", "Códigos asociados", choices = NULL, multiple = TRUE),
+                    actionBttn("addOrUpdateCategoria", "Guardar", style = "bordered", color = "success"),
+                    actionBttn("deleteCategoria", "Borrar", style = "bordered", color = "danger")
                 ),
-                box(width=8, title="Lista de Categorías", status="info", solidHeader=TRUE,
+                box(width = 8, title = "Lista de Categorías", status = "info", solidHeader = TRUE,
                     DTOutput("tablaCategorias")
                 )
               )
@@ -204,24 +206,24 @@ ui <- dashboardPage(
       # Resaltes
       tabItem("resaltes",
               fluidRow(
-                box(width=12, title="Tabla de Resaltes", status="danger", solidHeader=TRUE,
-                    downloadBttn("descarga","Descargar XLSX", style="gradient", color="primary"),
-                    DTOutput("tablaResaltes") %>% withSpinner(type=4)
+                box(width = 12, title = "Tabla de Resaltes", status = "danger", solidHeader = TRUE,
+                    downloadBttn("descarga", "Descargar XLSX", style = "gradient", color = "primary"),
+                    DTOutput("tablaResaltes") %>% withSpinner(type = 4)
                 )
               )
       ),
       # Análisis
       tabItem("analisis",
               fluidRow(
-                box(width=3, title="Opciones de Gráficos", status="primary", solidHeader=TRUE, collapsible=TRUE,
-                    prettySwitch("fillToggle","Fill por Categoría", value=TRUE, status="info")
+                box(width = 3, title = "Opciones de Gráficos", status = "primary", solidHeader = TRUE, collapsible = TRUE,
+                    prettySwitch("fillToggle", "Fill por Categoría", value = TRUE, status = "info")
                 ),
-                box(width=9, height=600, title="Frecuencias de Códigos", status="primary", solidHeader=TRUE,
+                box(width = 9, height = 600, title = "Frecuencias de Códigos", status = "primary", solidHeader = TRUE,
                     plotlyOutput("plotCodigos") %>% withSpinner()
                 )
               ),
               fluidRow(
-                box(width=12, height=600, title="Red de Códigos y Centralidad", status="primary", solidHeader=TRUE,
+                box(width = 12, height = 600, title = "Red de Códigos y Centralidad", status = "primary", solidHeader = TRUE,
                     plotOutput("plotRedCentralidad") %>% withSpinner()
                 )
               )
@@ -229,17 +231,29 @@ ui <- dashboardPage(
       # Estado
       tabItem("estado",
               fluidRow(
-                box(width=6, title="Guardar Estado", status="info", solidHeader=TRUE,
-                    downloadBttn("saveState","Guardar .rds", style="stretch", color="warning")
+                box(width = 6, title = "Guardar Estado", status = "info", solidHeader = TRUE,
+                    downloadBttn("saveState", "Guardar .rds", style = "stretch", color = "warning")
                 ),
-                box(width=6, title="Cargar Estado", status="info", solidHeader=TRUE,
-                    fileInput("loadState","Selecciona .rds", accept=".rds")
+                box(width = 6, title = "Cargar Estado", status = "info", solidHeader = TRUE,
+                    fileInput("loadState", "Selecciona .rds", accept = ".rds")
+                )
+              )
+      ),
+      # Info
+      tabItem("info",
+              fluidRow(
+                box(width = 12, title = "Acerca del programa", status = "primary", solidHeader = TRUE,
+                    p("RCualiText es una aplicación para la codificación cualitativa de textos que permite cargar documentos (.txt y .docx), definir códigos y categorías, resaltar extractos de interés y visualizar frecuencias y redes de coocurrencia de códigos."),
+                    p("Con RCualiText puedes gestionar de manera interactiva tu lista de códigos, agruparlos en categorías, exportar tus resaltados a Excel y analizar gráficamente tus datos cualitativos mediante gráficos de barras y redes de centralidad."),
+                    p(strong("Autor: Dr. José Ventura-León"))
+                    
                 )
               )
       )
     )
   )
 )
+
 
 # ========================================
 # Servidor
