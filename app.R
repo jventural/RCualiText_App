@@ -224,7 +224,7 @@ ui <- dashboardPage(
     title = div(
       style = "font-weight: bold; font-size: 18px; color: #fff; text-shadow: 1px 1px 2px rgba(0,0,0,0.3);",
       icon("microscope", style = "margin-right: 8px;"),
-      "RCualiText Pro"
+      "RCualiText"
     ), 
     titleWidth = 280
   ),
@@ -1089,7 +1089,7 @@ ui <- dashboardPage(
                         style = "space-y: 10px;",
                         div(strong("👨‍💻 Autor: "), "Dr. José Ventura-León"),
                         div(strong("📅 Año: "), "2025"),
-                        div(strong("🔢 Versión: "), "1.0"),
+                        div(strong("🔢 Versión: "), "2.0"),
                         div(strong("⚙️ Tipo: "), "Aplicación Shiny para análisis cualitativo"),
                         div(strong("🌐 Repositorio: "), 
                             tags$a("GitHub", 
@@ -1133,7 +1133,7 @@ ui <- dashboardPage(
                   # Descripción principal
                   div(
                     class = "info-panel",
-                    p("RCualiText Pro es una aplicación avanzada para la codificación cualitativa de textos que permite cargar documentos (.txt y .docx), definir códigos y categorías, resaltar extractos de interés y visualizar frecuencias y redes de coocurrencia de códigos.", 
+                    p("RCualiText es una aplicación avanzada para la codificación cualitativa de textos que permite cargar documentos (.txt y .docx), definir códigos y categorías, resaltar extractos de interés y visualizar frecuencias y redes de coocurrencia de códigos.", 
                       style = "font-size: 16px; line-height: 1.8; color: #2c3e50;"),
                     p("Con RCualiText puedes gestionar de manera interactiva tu lista de códigos, agruparlos en categorías, exportar tus resaltados a Excel y analizar gráficamente tus datos cualitativos mediante visualizaciones modernas y análisis de redes.", 
                       style = "font-size: 16px; line-height: 1.8; color: #2c3e50;")
@@ -2319,7 +2319,7 @@ server <- function(input, output, session) {
         version = "2.1_pro_custom_download",
         metadata = list(
           created = Sys.time(),
-          app_version = "RCualiText Pro v2.1 Custom Download",
+          app_version = "RCualiText v2.0 Custom Download",
           total_codes = nrow(rv$codigosDF),
           total_highlights = nrow(rv$tabla),
           total_docs = length(rv$docs)
