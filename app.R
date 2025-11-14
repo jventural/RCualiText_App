@@ -21,6 +21,14 @@ library(tidygraph)
 library(ggraph)
 library(patchwork)
 library(plotly)
+# para análisis con IA
+library(httr)
+library(jsonlite)
+library(readxl)
+options(shiny.maxRequestSize = 50 * 1024^2)
+
+# Asegurar que pipe viene de magrittr/dplyr
+`%>%` <- magrittr::`%>%`
 
 # ========================================
 # Función para leer archivos (.txt, .docx)
@@ -134,12 +142,15 @@ plot_codigos <- function(df, fill = TRUE, code_colors = NULL) {
     ))
   
   reorder_size <- function(x) factor(x, levels = names(sort(table(x))))
-  mapping    <- if (fill && "Categoria" %in% names(df)) {
-    aes(x = reorder_size(Codigo), fill = Categoria)
+  
+  # Configurar aesthetic y nombre de leyenda
+  if (fill && "Categoria" %in% names(df)) {
+    mapping <- aes(x = reorder_size(Codigo), fill = Categoria)
+    legend_title <- "Categoría"
   } else {
-    aes(x = reorder_size(Codigo), fill = Codigo)
+    mapping <- aes(x = reorder_size(Codigo), fill = Codigo)
+    legend_title <- "Código"
   }
-  legend_pos <- if (fill && "Categoria" %in% names(df)) "bottom" else "none"
   
   p <- df %>%
     ggplot(mapping) +
@@ -147,12 +158,15 @@ plot_codigos <- function(df, fill = TRUE, code_colors = NULL) {
     geom_text(aes(label = ..count..), stat="count", nudge_y=-0.6, size=3) +
     facet_wrap(~ Archivo, scales="free_y") +
     coord_flip() +
-    labs(x="Códigos", y="Frecuencia") +
+    labs(x="Códigos", y="Frecuencia", fill = legend_title) +
     theme_minimal(base_family = "Segoe UI") +
     theme(
-      legend.position = legend_pos,
-      strip.text      = element_text(size=12, face="bold"),
-      plot.title      = element_text(size=14, face="bold")
+      legend.position = "right",
+      legend.direction = "vertical",
+      legend.title = element_text(size = 11, face = "bold"),
+      legend.text = element_text(size = 10),
+      strip.text = element_text(size=12, face="bold"),
+      plot.title = element_text(size=14, face="bold")
     )
   
   if (!fill && !is.null(code_colors)) {
@@ -182,15 +196,23 @@ plot_network_and_centrality <- function(df, code_colors = NULL) {
   # Establecer semilla aleatoria fija para layout consistente
   set.seed(2025)
   
+  # Configurar plot de red
   net_plot <- ggraph(graph_tbl, layout="fr") +
     geom_edge_link(aes(width=weight), color="gray80", alpha=0.6) +
-    scale_edge_width(range = c(0.5, 3), guide = "none") +
-    geom_node_point(aes(fill=full_name), shape=21, size=12, color="white") +
-    { if (!is.null(code_colors)) scale_fill_manual(name="Código", values=code_colors)
-      else scale_fill_brewer("Código", palette="Set3") } +
-    geom_node_text(aes(label=label_abbr), size=3) +
-    theme_void() +
-    theme(legend.position="right")
+    scale_edge_width(range = c(0.3, 2), guide = "none") +
+    geom_node_point(aes(fill=full_name), shape=21, size=10, color="white") +
+    { if (!is.null(code_colors))
+      scale_fill_manual(name="Código", values=code_colors)
+      else
+        scale_fill_brewer(name="Código", palette="Set3") } +
+    geom_node_text(aes(label=label_abbr), size=2.5) +
+    guides(fill = guide_legend(
+      nrow = 1,
+      byrow = TRUE,
+      title.position = "top",
+      title.hjust = 0.5
+    )) +
+    theme_void()
   
   cents <- graph_tbl %>%
     as_tibble() %>%
@@ -200,19 +222,107 @@ plot_network_and_centrality <- function(df, code_colors = NULL) {
     mutate(zscore = round((value - mean(value)) / sd(value), 2)) %>%
     ungroup()
   
+  # Plot de centralidad
   cent_plot <- cents %>%
     filter(metric == "strength") %>%
     ggplot(aes(full_name, zscore, group = metric)) +
-    geom_line() + geom_point(size = 3) +
+    geom_line() +
+    geom_point(size = 2) +
     coord_flip() +
     labs(y = "Centralidad (z-score)", x = "Código") +
-    theme_bw()
+    theme_bw(base_size = 10)
   
+  # Combinar plots con leyenda compartida en la parte inferior centrada
   combined <- net_plot + cent_plot +
-    plot_layout(ncol=2, widths=c(3,1), guides="collect") &
-    theme(legend.position="bottom")
+    plot_layout(ncol=2, widths=c(3,1), guides="collect")
+  
+  # Aplicar tema global para centrar la leyenda
+  combined <- combined +
+    patchwork::plot_annotation(
+      theme = ggplot2::theme(
+        legend.position = "bottom",
+        legend.direction = "horizontal",
+        legend.justification = "center",
+        legend.box = "horizontal",
+        legend.title = ggplot2::element_text(size = 10, face = "bold"),
+        legend.text = ggplot2::element_text(size = 8),
+        legend.margin = ggplot2::margin(t = 8, b = 5),
+        plot.margin = ggplot2::margin(t = 5, r = 5, b = 15, l = 5)
+      )
+    )
   
   list(plot = combined, table = cents)
+}
+
+# ========================================
+# Función para llamar a la API de OpenAI (Análisis con IA)
+# ========================================
+call_openai_api <- function(prompt, api_key, model = "gpt-4.1") {
+  # Validaciones defensivas
+  if (is.null(prompt) || length(prompt) == 0 || is.na(prompt[1])) {
+    stop("Prompt no válido")
+  }
+  
+  # Forzar prompt a ser un string simple
+  prompt <- as.character(prompt)[1]
+  
+  if (nchar(prompt) == 0) {
+    stop("Prompt vacío")
+  }
+  
+  resp <- NULL
+  intento <- 1
+  last_error <- NULL
+  
+  while (intento <= 3) {
+    resp <- tryCatch({
+      httr::POST(
+        "https://api.openai.com/v1/chat/completions",
+        httr::add_headers(
+          Authorization = paste("Bearer", api_key),
+          `Content-Type`  = "application/json"
+        ),
+        httr::timeout(160),
+        body = jsonlite::toJSON(list(
+          model       = model,
+          messages    = list(
+            list(role = "system",
+                 content = "Eres un experto en análisis cualitativo de datos textuales y codificación temática."),
+            list(role = "user", content = as.character(prompt)[1])
+          ),
+          temperature = 0.2
+        ), auto_unbox = TRUE)
+      )
+    }, error = function(e) {
+      last_error <<- e$message
+      NULL
+    })
+    
+    if (!is.null(resp)) {
+      if (httr::status_code(resp) == 200) {
+        return(httr::content(resp)$choices[[1]]$message$content)
+      } else {
+        # Capturar mensaje de error de la API
+        error_content <- tryCatch(httr::content(resp), error = function(e) NULL)
+        if (!is.null(error_content$error$message)) {
+          last_error <- error_content$error$message
+        } else {
+          last_error <- paste("HTTP Status:", httr::status_code(resp))
+        }
+      }
+    }
+    
+    intento <- intento + 1
+    Sys.sleep(2)
+  }
+  
+  # Si llegamos aquí, falló después de 3 intentos
+  error_msg <- if (!is.null(last_error)) {
+    paste0("Error OpenAI: ", last_error)
+  } else {
+    "No se pudo conectar con OpenAI"
+  }
+  stop(error_msg)
 }
 
 # ========================================
@@ -238,6 +348,8 @@ ui <- dashboardPage(
       menuItem("📁 Categorías", tabName = "categorias", icon = icon("folder-open")),
       menuItem("🎨 Resaltados", tabName = "resaltes", icon = icon("highlighter")),
       menuItem("📊 Análisis", tabName = "analisis", icon = icon("project-diagram")),
+      menuItem("🤖 Análisis IA (opcional)", tabName = "analisis_ia", icon = icon("robot"),
+               badgeLabel = "IA", badgeColor = "purple"),
       menuItem("💾 Estado", tabName = "estado", icon = icon("save")),
       menuItem("📚 Citar", tabName = "citar", icon = icon("quote-right")),
       menuItem("ℹ️ Ayuda", tabName = "info", icon = icon("info-circle"))
@@ -946,54 +1058,139 @@ ui <- dashboardPage(
                   )
                 ),
                 box(
-                  width = 9, 
-                  height = 650, 
-                  title = "📊 Distribución de Códigos", 
-                  status = "primary", 
+                  width = 9,
+                  height = 650,
+                  title = "📊 Distribución de Códigos",
+                  status = "primary",
                   solidHeader = TRUE,
                   
-                  # Botón de descarga para gráfico de distribución
-                  div(
-                    class = "download-controls-container",
-                    div(
-                      class = "download-controls-grid",
-                      div(),
-                      div(),
-                      div(),
-                      downloadBttn("download_distribucion_jpg", 
-                                   div(icon("download"), " Descargar JPG"), 
-                                   style = "gradient", color = "success", size = "sm")
-                    )
-                  ),
-                  
-                  plotlyOutput("plotCodigos", height = "550px") %>% 
+                  plotlyOutput("plotCodigos", height = "580px") %>%
                     withSpinner(type = 6, color = "#3498db")
+                ),
+                box(
+                  width = 3,
+                  title = "💾 Descargas",
+                  status = "success",
+                  solidHeader = TRUE,
+                  downloadBttn("download_distribucion_jpg",
+                               div(icon("download"), " Distribución (JPG)"),
+                               style = "gradient", color = "success", size = "sm", block = TRUE)
                 )
               ),
               fluidRow(
                 box(
-                  width = 12, 
-                  height = 750, 
-                  title = "🕸️ Red de Coocurrencia y Análisis de Centralidad", 
-                  status = "primary", 
+                  width = 12,
+                  title = "💾 Descarga Red",
+                  status = "success",
+                  solidHeader = TRUE,
+                  collapsible = TRUE,
+                  collapsed = TRUE,
+                  downloadBttn("download_red_jpg",
+                               div(icon("download"), " Red de Coocurrencia (JPG)"),
+                               style = "gradient", color = "success", size = "sm")
+                )
+              ),
+              fluidRow(
+                box(
+                  width = 12,
+                  height = 750,
+                  title = "🕸️ Red de Coocurrencia y Análisis de Centralidad",
+                  status = "primary",
                   solidHeader = TRUE,
                   
-                  # Botón de descarga para gráfico de red
+                  plotOutput("plotRedCentralidad", height = "680px") %>%
+                    withSpinner(type = 6, color = "#3498db")
+                )
+              )
+      ),
+      
+      # ---- Análisis IA (nuevo) ----
+      tabItem("analisis_ia",
+              fluidRow(
+                box(
+                  width = 4,
+                  title = "🤖 Configuración del Análisis IA",
+                  status = "primary",
+                  solidHeader = TRUE,
                   div(
-                    class = "download-controls-container",
-                    div(
-                      class = "download-controls-grid",
-                      div(),
-                      div(),
-                      div(),
-                      downloadBttn("download_red_jpg", 
-                                   div(icon("download"), " Descargar JPG"), 
-                                   style = "gradient", color = "success", size = "sm")
-                    )
+                    class = "info-panel",
+                    h5(icon("key"), " API de OpenAI", style = "color: #2c3e50; margin-bottom: 15px;"),
+                    passwordInput("openai_api_key",
+                                  div(icon("lock"), " API Key"),
+                                  placeholder = "sk-..."),
+                    helpText("Tu API Key de OpenAI (gpt-4)",
+                             style = "color: #7f8c8d; font-size: 12px;")
                   ),
                   
-                  plotOutput("plotRedCentralidad", height = "600px") %>% 
-                    withSpinner(type = 6, color = "#3498db")
+                  div(
+                    class = "info-panel",
+                    style = "margin-top: 20px;",
+                    h5(icon("book"), " Diccionario de Códigos", style = "color: #2c3e50; margin-bottom: 15px;"),
+                    fileInput("dict_ia",
+                              div(icon("upload"), " Cargar Diccionario"),
+                              accept = c(".csv", ".xlsx"),
+                              buttonLabel = "Examinar...",
+                              placeholder = "Archivo .csv o .xlsx"),
+                    helpText("Debe tener columnas: Categoría, Código, Definición",
+                             style = "color: #7f8c8d; font-size: 12px;")
+                  ),
+                  
+                  div(
+                    style = "margin-top: 25px;",
+                    actionBttn("run_ia_analysis",
+                               div(icon("play"), " Ejecutar Análisis IA"),
+                               style = "gradient", color = "royal", size = "md", block = TRUE),
+                    downloadBttn("download_ia_results",
+                                 label = "Descargar Resultados (.xlsx)",
+                                 style = "gradient", color = "success", size = "md", block = TRUE),
+                    helpText("Los resultados se mostrarán abajo. Descarga la tabla en Excel con el botón de arriba.",
+                             style = "color: #7f8c8d; font-size: 12px; margin-top: 10px;")
+                  )
+                ),
+                box(
+                  width = 8,
+                  title = "📊 Resultados del Análisis IA",
+                  status = "primary",
+                  solidHeader = TRUE,
+                  div(
+                    class = "info-panel",
+                    h5(icon("info-circle"), " Instrucciones", style = "color: #2c3e50;"),
+                    p("1. Asegúrate de tener documentos cargados en la pestaña 'Documento'",
+                      style = "color: #7f8c8d;"),
+                    p("2. Ingresa tu API Key de OpenAI",
+                      style = "color: #7f8c8d;"),
+                    p("3. Carga un diccionario de códigos con las columnas: Categoría, Código, Definición",
+                      style = "color: #7f8c8d;"),
+                    p("4. Ejecuta el análisis y revisa los resultados",
+                      style = "color: #7f8c8d;"),
+                    p("5. Si estás satisfecho, integra los resultados al análisis manual",
+                      style = "color: #7f8c8d;")
+                  ),
+                  DTOutput("tabla_ia_results") %>% withSpinner(type = 6, color = "#3498db")
+                )
+              ),
+              
+              # Análisis visual de resultados IA
+              fluidRow(
+                box(
+                  width = 12,
+                  title = "📊 Análisis Visual de Resultados IA",
+                  status = "info",
+                  solidHeader = TRUE,
+                  collapsible = TRUE,
+                  
+                  fluidRow(
+                    column(6,
+                           h5(icon("chart-bar"), " Distribución de Códigos", style = "color: #2c3e50; margin-bottom: 15px;"),
+                           plotlyOutput("plot_ia_distribucion", height = "400px") %>%
+                             withSpinner(type = 6, color = "#17a2b8")
+                    ),
+                    column(6,
+                           h5(icon("chart-pie"), " Fragmentos por Categoría", style = "color: #2c3e50; margin-bottom: 15px;"),
+                           plotlyOutput("plot_ia_categorias", height = "400px") %>%
+                             withSpinner(type = 6, color = "#17a2b8")
+                    )
+                  )
                 )
               )
       ),
@@ -1204,7 +1401,14 @@ server <- function(input, output, session) {
       FragmentId = character(),
       Timestamp  = as.POSIXct(character())
     ),
-    deselectMode = FALSE
+    deselectMode = FALSE,
+    ia_results   = tibble(
+      Archivo    = character(),
+      Categoria  = character(),
+      Codigo     = character(),
+      Definicion = character(),
+      Extracto   = character()
+    )
   )
   
   get_code_colors <- reactive({
@@ -2263,33 +2467,35 @@ server <- function(input, output, session) {
     tryCatch({
       p <- plot_codigos(rv$tabla, fill = input$fillToggle, code_colors = get_code_colors())
       
-      ggplotly(p, tooltip = c("x", "y")) %>% 
-        layout(
+      plotly_obj <- plotly::ggplotly(p, tooltip = c("x", "y", "fill"))
+      
+      # Configurar layout para plotly con leyenda a la derecha
+      plotly_obj <- plotly_obj %>%
+        plotly::layout(
           legend = list(
-            orientation = "h", 
-            x = 0.5, 
-            y = -0.15,
-            xanchor = "center"
+            orientation = "v",
+            x = 1.02,
+            y = 0.5,
+            xanchor = "left",
+            yanchor = "middle",
+            font = list(size = 9),
+            bgcolor = "rgba(255,255,255,0.9)",
+            bordercolor = "rgba(0,0,0,0.2)",
+            borderwidth = 1
           ),
-          margin = list(b = 100),
+          margin = list(b = 40, l = 70, r = 150, t = 30),
           plot_bgcolor = "rgba(0,0,0,0)",
           paper_bgcolor = "rgba(0,0,0,0)"
         ) %>%
-        config(displayModeBar = FALSE)
-    }, error = function(e) {
-      # En caso de error, mostrar un gráfico simple
-      p_simple <- ggplot(rv$tabla, aes(x = Codigo)) +
-        geom_bar(fill = "#3498db", alpha = 0.8) +
-        labs(x = "Códigos", y = "Frecuencia") +
-        theme_minimal(base_family = "Arial") +
-        theme(
-          axis.text = element_text(color = "#34495e"),
-          axis.title = element_text(color = "#2c3e50", face = "bold")
-        ) +
-        coord_flip()
+        plotly::config(displayModeBar = FALSE)
       
-      ggplotly(p_simple) %>%
-        layout(plot_bgcolor = "rgba(0,0,0,0)", paper_bgcolor = "rgba(0,0,0,0)")
+      # Retornar el objeto
+      plotly_obj
+      
+    }, error = function(e) {
+      # En caso de error, mostrar mensaje
+      showNotification(paste("Error al generar gráfico:", e$message), type = "error")
+      NULL
     })
   })
   
@@ -2316,13 +2522,15 @@ server <- function(input, output, session) {
         texto = rv$texto,
         tabla = rv$tabla,
         deselectMode = rv$deselectMode,
-        version = "2.1_pro_custom_download",
+        ia_results = rv$ia_results,  # Guardar resultados de IA
+        version = "2.2_con_ia",
         metadata = list(
           created = Sys.time(),
-          app_version = "RCualiText v2.0 Custom Download",
+          app_version = "RCualiText v2.0 con IA",
           total_codes = nrow(rv$codigosDF),
           total_highlights = nrow(rv$tabla),
-          total_docs = length(rv$docs)
+          total_docs = length(rv$docs),
+          ia_results_count = nrow(rv$ia_results)
         )
       )
       saveRDS(estado, file)
@@ -2358,6 +2566,17 @@ server <- function(input, output, session) {
         }
       }
       
+      # Si no existe ia_results en el archivo antiguo, inicializarlo
+      if (is.null(rv$ia_results)) {
+        rv$ia_results <- tibble(
+          Archivo = character(),
+          Categoria = character(),
+          Codigo = character(),
+          Definicion = character(),
+          Extracto = character()
+        )
+      }
+      
       # Limpiar categorías vacías en datos existentes
       if (nrow(rv$tabla) > 0) {
         rv$tabla <- rv$tabla %>%
@@ -2381,15 +2600,19 @@ server <- function(input, output, session) {
       # Mostrar información del proyecto cargado
       metadata_info <- ""
       if (!is.null(est$metadata)) {
+        ia_info <- ""
+        if (!is.null(est$metadata$ia_results_count) && est$metadata$ia_results_count > 0) {
+          ia_info <- paste0(", ", est$metadata$ia_results_count, " resultados IA")
+        }
         metadata_info <- paste0(
-          " (", est$metadata$total_codes, " códigos, ", 
-          est$metadata$total_highlights, " resaltados)"
+          " (", est$metadata$total_codes, " códigos, ",
+          est$metadata$total_highlights, " resaltados", ia_info, ")"
         )
       }
       
       showNotification(
-        paste0("📂 Proyecto cargado exitosamente", metadata_info), 
-        type = "message", 
+        paste0("📂 Proyecto cargado exitosamente", metadata_info),
+        type = "message",
         duration = 4
       )
       
@@ -2451,6 +2674,300 @@ server <- function(input, output, session) {
       )
     }
   })
+  
+  # ========================================
+  # Análisis IA
+  # ========================================
+  
+  # Cargar diccionario para IA
+  dict_ia_df <- reactive({
+    req(input$dict_ia)
+    ext <- tools::file_ext(input$dict_ia$datapath)
+    df <- switch(ext,
+                 csv  = read.csv(input$dict_ia$datapath, stringsAsFactors = FALSE),
+                 xlsx = read_excel(input$dict_ia$datapath),
+                 stop("Formato de diccionario no soportado"))
+    
+    # Validar columnas
+    expected_cols <- c("Categoría", "Código", "Definición")
+    if (!all(expected_cols %in% names(df))) {
+      # Intentar con nombres alternativos
+      if (all(c("Categoria", "Codigo", "Definicion") %in% names(df))) {
+        names(df)[names(df) == "Categoria"] <- "Categoría"
+        names(df)[names(df) == "Codigo"] <- "Código"
+        names(df)[names(df) == "Definicion"] <- "Definición"
+      } else {
+        stop("El diccionario debe tener columnas: Categoría, Código, Definición")
+      }
+    }
+    df
+  })
+  
+  # Ejecutar análisis IA
+  observeEvent(input$run_ia_analysis, {
+    # Validaciones
+    if (!nzchar(input$openai_api_key)) {
+      showNotification("❌ Ingresa tu API Key de OpenAI", type = "error", duration = 3)
+      return()
+    }
+    if (is.null(rv$docs) || length(rv$docs) == 0) {
+      showNotification("❌ Carga al menos un documento en la pestaña 'Documento'", type = "error", duration = 3)
+      return()
+    }
+    
+    dict <- tryCatch(dict_ia_df(), error = function(e) NULL)
+    if (is.null(dict) || nrow(dict) == 0) {
+      showNotification("❌ Carga un diccionario de códigos válido", type = "error", duration = 3)
+      return()
+    }
+    
+    api_key <- input$openai_api_key
+    n_codes <- nrow(dict)
+    total <- length(rv$docs) * n_codes
+    
+    withProgress(message = "🤖 Analizando con IA...", value = 0, {
+      results_list <- vector("list", total)
+      step <- 0
+      
+      for (i in seq_along(rv$docs)) {
+        doc_name <- rv$docs[[i]]$name
+        doc_text <- rv$docs[[i]]$modified  # Usar el texto modificado
+        
+        for (j in seq_len(n_codes)) {
+          step <- step + 1
+          catg <- dict$Categoría[j]
+          code <- dict$Código[j]
+          def <- dict$Definición[j]
+          
+          incProgress(amount = 1/total,
+                      detail = paste(doc_name, "-", code))
+          
+          prompt <- paste0(
+            "Del texto:\n\n", doc_text,
+            "\n\nExtrae fragmentos que correspondan a la siguiente definición:\n\"",
+            def, "\"\n\nResponde solo con los fragmentos extraídos, uno por línea."
+          )
+          
+          tryCatch({
+            txt_out <- call_openai_api(prompt, api_key)
+            exs <- str_split(txt_out, "\n")[[1]]
+            exs <- exs[exs != "" & !grepl("^\\s*$", exs)]
+            
+            results_list[[step]] <- tibble(
+              Archivo = doc_name,
+              Categoria = catg,
+              Codigo = code,
+              Definicion = def,
+              Extracto = if(length(exs) > 0) exs else NA_character_
+            )
+          }, error = function(e) {
+            showNotification(
+              paste("❌", code, ":", e$message),
+              type = "warning",
+              duration = 5
+            )
+            results_list[[step]] <- tibble(
+              Archivo = doc_name,
+              Categoria = catg,
+              Codigo = code,
+              Definicion = def,
+              Extracto = NA_character_
+            )
+          })
+        }
+      }
+      
+      # Combinar resultados
+      all_results <- bind_rows(results_list)
+      
+      # FORZAR la creación de la columna Archivo si no existe
+      if (!"Archivo" %in% names(all_results) && nrow(all_results) > 0) {
+        # Recrear la columna Archivo basándose en los nombres de documentos
+        doc_names <- sapply(rv$docs, function(d) d$name)
+        n_docs <- length(doc_names)
+        n_codes <- nrow(dict)
+        
+        # Crear vector de nombres de archivo que se repite para cada código
+        archivo_vec <- rep(doc_names, each = n_codes)
+        # Tomar solo las primeras nrow(all_results) entradas
+        archivo_vec <- archivo_vec[1:nrow(all_results)]
+        
+        # Crear nuevo tibble con columna Archivo al inicio
+        all_results <- tibble(
+          Archivo = archivo_vec,
+          Categoria = all_results$Categoria,
+          Codigo = all_results$Codigo,
+          Definicion = all_results$Definicion,
+          Extracto = all_results$Extracto
+        )
+      }
+      
+      if (!is.null(all_results) && nrow(all_results) > 0 && "Extracto" %in% names(all_results)) {
+        rv$ia_results <- all_results %>%
+          filter(!is.na(Extracto) & nchar(trimws(Extracto)) > 0)
+      } else {
+        rv$ia_results <- tibble(
+          Archivo = character(),
+          Categoria = character(),
+          Codigo = character(),
+          Definicion = character(),
+          Extracto = character()
+        )
+      }
+      
+      # Verificar si se obtuvieron resultados
+      if (nrow(rv$ia_results) == 0) {
+        showNotification(
+          "⚠️ No se pudieron extraer fragmentos. Verifica tu API Key y conexión.",
+          type = "warning",
+          duration = 5
+        )
+      } else {
+        showNotification(
+          paste("✅ Análisis IA completado:", nrow(rv$ia_results), "extractos encontrados"),
+          type = "message",
+          duration = 3
+        )
+      }
+    })
+  })
+  
+  # Mostrar resultados IA
+  output$tabla_ia_results <- renderDT({
+    req(nrow(rv$ia_results) > 0)
+    
+    datatable(
+      rv$ia_results,
+      options = list(
+        pageLength = 10,
+        scrollX = TRUE,
+        language = list(
+          search = "Buscar:",
+          lengthMenu = "Mostrar _MENU_ registros",
+          info = "Mostrando _START_ a _END_ de _TOTAL_ registros",
+          paginate = list(
+            first = "Primero",
+            last = "Último",
+            `next` = "Siguiente",
+            previous = "Anterior"
+          )
+        )
+      ),
+      rownames = FALSE
+    )
+  })
+  
+  # Gráfico de distribución de códigos IA
+  output$plot_ia_distribucion <- renderPlotly({
+    req(nrow(rv$ia_results) > 0)
+    
+    tryCatch({
+      # Contar frecuencia de códigos
+      freq_data <- rv$ia_results %>%
+        count(Codigo, Categoria, name = "Frecuencia") %>%
+        arrange(desc(Frecuencia))
+      
+      p <- ggplot(freq_data, aes(x = reorder(Codigo, Frecuencia), y = Frecuencia, fill = Categoria)) +
+        geom_col() +
+        coord_flip() +
+        labs(x = "Código", y = "Frecuencia", fill = "Categoría") +
+        theme_minimal() +
+        theme(
+          legend.position = "right",
+          legend.title = element_text(size = 10, face = "bold"),
+          legend.text = element_text(size = 9)
+        )
+      
+      plotly::ggplotly(p, tooltip = c("x", "y", "fill")) %>%
+        plotly::layout(
+          margin = list(l = 100, r = 100, t = 50, b = 50),
+          plot_bgcolor = "rgba(0,0,0,0)",
+          paper_bgcolor = "rgba(0,0,0,0)"
+        ) %>%
+        plotly::config(displayModeBar = FALSE)
+    }, error = function(e) {
+      NULL
+    })
+  })
+  
+  # Gráfico de fragmentos por categoría IA
+  output$plot_ia_categorias <- renderPlotly({
+    req(nrow(rv$ia_results) > 0)
+    
+    tryCatch({
+      # Contar fragmentos por categoría
+      cat_data <- rv$ia_results %>%
+        count(Categoria, name = "Fragmentos") %>%
+        arrange(desc(Fragmentos))
+      
+      p <- plot_ly(
+        cat_data,
+        labels = ~Categoria,
+        values = ~Fragmentos,
+        type = "pie",
+        textposition = "inside",
+        textinfo = "label+percent",
+        hoverinfo = "label+value+percent",
+        marker = list(
+          line = list(color = "white", width = 2)
+        )
+      ) %>%
+        plotly::layout(
+          showlegend = TRUE,
+          legend = list(
+            orientation = "v",
+            x = 1.02,
+            y = 0.5
+          ),
+          margin = list(l = 50, r = 150, t = 50, b = 50),
+          plot_bgcolor = "rgba(0,0,0,0)",
+          paper_bgcolor = "rgba(0,0,0,0)"
+        ) %>%
+        plotly::config(displayModeBar = FALSE)
+      
+      p
+    }, error = function(e) {
+      NULL
+    })
+  })
+  
+  # ========================================
+  # Descarga de resultados IA
+  # ========================================
+  output$download_ia_results <- downloadHandler(
+    filename = function() {
+      paste0("resultados_ia_", Sys.Date(), ".xlsx")
+    },
+    content = function(file) {
+      req(nrow(rv$ia_results) > 0)
+      
+      # Crear workbook
+      wb <- createWorkbook()
+      addWorksheet(wb, "Resultados IA")
+      
+      # Escribir los datos
+      writeData(wb, "Resultados IA", rv$ia_results)
+      
+      # Aplicar estilos al encabezado
+      headerStyle <- createStyle(
+        fontSize = 12,
+        fontColour = "#FFFFFF",
+        halign = "center",
+        fgFill = "#4F81BD",
+        border = "TopBottom",
+        borderColour = "#4F81BD",
+        textDecoration = "bold"
+      )
+      
+      addStyle(wb, sheet = "Resultados IA", headerStyle, rows = 1, cols = 1:5, gridExpand = TRUE)
+      
+      # Ajustar anchos de columna
+      setColWidths(wb, sheet = "Resultados IA", cols = 1:5, widths = c(25, 20, 20, 40, 50))
+      
+      # Guardar
+      saveWorkbook(wb, file, overwrite = TRUE)
+    }
+  )
 }
 
 # ========================================
