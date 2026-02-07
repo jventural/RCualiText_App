@@ -53,7 +53,7 @@ leer_archivo <- function(archivo) {
     # Limpiar espacios al inicio y final
     str_trim(texto_final)
   } else {
-    "Formato no soportado"
+    "Format not supported"
   }
 }
 
@@ -88,7 +88,7 @@ generar_css_multiples <- function(colores) {
 }
 
 # Función para aplicar resaltado múltiple al texto
-aplicar_resaltado_multiple <- function(texto_original, fragmentos_df) {
+aplicar_resaltado_multiple <- function(texto_original, fragmentos_df, codes_label = "Codes") {
   if (nrow(fragmentos_df) == 0) return(texto_original)
   
   texto_procesado <- texto_original
@@ -117,7 +117,7 @@ aplicar_resaltado_multiple <- function(texto_original, fragmentos_df) {
     # Crear el span con el resaltado y tooltip
     span_text <- paste0(
       "<span class='highlight-multiple' data-fragment-id='", fragment_id, "' ",
-      "title='Códigos: ", codigos_aplicados, "' ",
+      "title='", codes_label, ": ", codigos_aplicados, "' ",
       "style='", css_style, " padding: 4px 8px; margin: 2px; color: #fff; font-weight: 500; text-shadow: 1px 1px 2px rgba(0,0,0,0.3);'>",
       texto_buscar,
       "</span>"
@@ -135,11 +135,12 @@ aplicar_resaltado_multiple <- function(texto_original, fragmentos_df) {
 # ========================================
 # Funciones de análisis y visualización (versiones optimizadas)
 # ========================================
-plot_codigos <- function(df, fill = TRUE, code_colors = NULL) {
+plot_codigos <- function(df, fill = TRUE, code_colors = NULL, labels = list(freq = "Frequency", codes = "Codes", cat = "Category")) {
   # Limpiar datos de categorías vacías o NA
+  sin_cat_label <- if (!is.null(labels$sin_cat)) labels$sin_cat else "Uncategorized"
   df <- df %>%
     mutate(Categoria = case_when(
-      is.na(Categoria) | Categoria == "" ~ "Sin categoría",
+      is.na(Categoria) | Categoria == "" ~ sin_cat_label,
       TRUE ~ Categoria
     ))
 
@@ -170,7 +171,7 @@ plot_codigos <- function(df, fill = TRUE, code_colors = NULL) {
       text = ~Frecuencia,
       textposition = "outside",
       textfont = list(size = 12, color = "#2c3e50", family = "Arial Black"),
-      hovertemplate = "<b>%{y}</b><br>Frecuencia: %{x}<extra></extra>"
+      hovertemplate = paste0("<b>%{y}</b><br>", labels$freq, ": %{x}<extra></extra>")
     )
   } else {
     # Aplicar colores personalizados si existen
@@ -188,7 +189,7 @@ plot_codigos <- function(df, fill = TRUE, code_colors = NULL) {
         textposition = "outside",
         textfont = list(size = 12, color = "#2c3e50", family = "Arial Black"),
         marker = list(color = ~Color),
-        hovertemplate = "<b>%{y}</b><br>Frecuencia: %{x}<extra></extra>"
+        hovertemplate = paste0("<b>%{y}</b><br>", labels$freq, ": %{x}<extra></extra>")
       )
     } else {
       p <- plotly::plot_ly(
@@ -201,7 +202,7 @@ plot_codigos <- function(df, fill = TRUE, code_colors = NULL) {
         text = ~Frecuencia,
         textposition = "outside",
         textfont = list(size = 12, color = "#2c3e50", family = "Arial Black"),
-        hovertemplate = "<b>%{y}</b><br>Frecuencia: %{x}<extra></extra>"
+        hovertemplate = paste0("<b>%{y}</b><br>", labels$freq, ": %{x}<extra></extra>")
       )
     }
   }
@@ -210,11 +211,11 @@ plot_codigos <- function(df, fill = TRUE, code_colors = NULL) {
   p <- p %>%
     plotly::layout(
       xaxis = list(
-        title = list(text = "Frecuencia", font = list(size = 12, family = "sans-serif")),
+        title = list(text = labels$freq, font = list(size = 12, family = "sans-serif")),
         tickfont = list(size = 10)
       ),
       yaxis = list(
-        title = list(text = "Códigos", font = list(size = 12, family = "sans-serif")),
+        title = list(text = labels$codes, font = list(size = 12, family = "sans-serif")),
         tickfont = list(size = 10),
         categoryorder = "total ascending"
       ),
@@ -236,10 +237,11 @@ plot_codigos <- function(df, fill = TRUE, code_colors = NULL) {
 }
 
 # Función ggplot para descarga JPG (mantener para exportación estática)
-plot_codigos_ggplot <- function(df, fill = TRUE, code_colors = NULL) {
+plot_codigos_ggplot <- function(df, fill = TRUE, code_colors = NULL, labels = list(freq = "Frequency", codes = "Codes", cat = "Category", code = "Code")) {
+  sin_cat_label <- if (!is.null(labels$sin_cat)) labels$sin_cat else "Uncategorized"
   df <- df %>%
     mutate(Categoria = case_when(
-      is.na(Categoria) | Categoria == "" ~ "Sin categoría",
+      is.na(Categoria) | Categoria == "" ~ sin_cat_label,
       TRUE ~ Categoria
     ))
 
@@ -255,7 +257,7 @@ plot_codigos_ggplot <- function(df, fill = TRUE, code_colors = NULL) {
       geom_text(aes(label = Frecuencia), hjust = -0.3, size = 4, fontface = "bold", color = "#2c3e50") +
       facet_wrap(~ Archivo, scales = "free_y") +
       coord_flip() +
-      labs(x = "Códigos", y = "Frecuencia", fill = "Categoría")
+      labs(x = labels$codes, y = labels$freq, fill = labels$cat)
   } else {
     df_counts <- df %>%
       count(Archivo, Codigo, name = "Frecuencia") %>%
@@ -268,7 +270,7 @@ plot_codigos_ggplot <- function(df, fill = TRUE, code_colors = NULL) {
       geom_text(aes(label = Frecuencia), hjust = -0.3, size = 4, fontface = "bold", color = "#2c3e50") +
       facet_wrap(~ Archivo, scales = "free_y") +
       coord_flip() +
-      labs(x = "Códigos", y = "Frecuencia", fill = "Código")
+      labs(x = labels$codes, y = labels$freq, fill = labels$code)
   }
 
   p <- p +
@@ -291,7 +293,7 @@ plot_codigos_ggplot <- function(df, fill = TRUE, code_colors = NULL) {
   p
 }
 
-plot_network_and_centrality <- function(df, code_colors = NULL) {
+plot_network_and_centrality <- function(df, code_colors = NULL, labels = list(code = "Code", centrality = "Centrality (z-score)")) {
   dtm <- df %>%
     count(Archivo, Codigo, name="freq") %>%
     pivot_wider(names_from=Codigo, values_from=freq, values_fill=0)
@@ -318,9 +320,9 @@ plot_network_and_centrality <- function(df, code_colors = NULL) {
     scale_edge_width(range = c(0.5, 3), guide = "none") +
     geom_node_point(aes(fill=full_name), shape=21, size=12, color="white") +
     { if (!is.null(code_colors))
-      scale_fill_manual(name="Código", values=code_colors)
+      scale_fill_manual(name=labels$code, values=code_colors)
       else
-        scale_fill_brewer(name="Código", palette="Set3") } +
+        scale_fill_brewer(name=labels$code, palette="Set3") } +
     geom_node_text(aes(label=label_abbr), size=3.5) +
     guides(fill = guide_legend(
       nrow = 2,
@@ -353,7 +355,7 @@ plot_network_and_centrality <- function(df, code_colors = NULL) {
       else
         scale_fill_brewer(palette = "Set3", guide = "none") } +
     coord_flip() +
-    labs(y = "Centralidad (z-score)", x = "Código") +
+    labs(y = labels$centrality, x = labels$code) +
     theme_bw(base_size = 10) +
     theme(
       axis.text.y = element_text(size = 9),
@@ -486,7 +488,7 @@ clustering_semantico <- function(embeddings_matrix, n_clusters = NULL, metodo = 
 }
 
 # Función para detectar fragmentos similares con diferente código
-detectar_similares_diferente_codigo <- function(tabla, similitud_matrix, umbral = 0.8) {
+detectar_similares_diferente_codigo <- function(tabla, similitud_matrix, umbral = 0.8, labels = list(alta = "High similarity - review coding", moderada = "Moderate similarity - consider merging")) {
   if (is.null(similitud_matrix) || nrow(tabla) < 2) {
     return(tibble())
   }
@@ -508,7 +510,7 @@ detectar_similares_diferente_codigo <- function(tabla, similitud_matrix, umbral 
             Fragmento2 = tabla$Extracto[j],
             Codigo2 = codigo_j,
             Similitud = round(sim, 3),
-            Sugerencia = ifelse(sim > 0.9, "Alta similitud - revisar codificación", "Similitud moderada - considerar unificar")
+            Sugerencia = ifelse(sim > 0.9, labels$alta, labels$moderada)
           )
         }
       }
@@ -549,10 +551,10 @@ analizar_coherencia_codigos <- function(tabla, similitud_matrix) {
         Coherencia_Max = round(max(valores), 3),
         Coherencia_SD = round(sd(valores), 3),
         Evaluacion = case_when(
-          mean(valores) >= 0.8 ~ "Excelente",
-          mean(valores) >= 0.6 ~ "Buena",
-          mean(valores) >= 0.4 ~ "Moderada",
-          TRUE ~ "Baja - revisar"
+          mean(valores) >= 0.8 ~ "excellent",
+          mean(valores) >= 0.6 ~ "good",
+          mean(valores) >= 0.4 ~ "moderate",
+          TRUE ~ "low_review"
         )
       )
     } else {
@@ -563,7 +565,7 @@ analizar_coherencia_codigos <- function(tabla, similitud_matrix) {
         Coherencia_Min = NA_real_,
         Coherencia_Max = NA_real_,
         Coherencia_SD = NA_real_,
-        Evaluacion = "Insuficiente (< 2 fragmentos)"
+        Evaluacion = "insufficient"
       )
     }
   }
@@ -661,7 +663,7 @@ calcular_red_semantica_codigos <- function(embeddings_matrix, tabla, umbral_cone
 }
 
 # Función para visualización de embeddings (t-SNE/PCA)
-plot_embeddings_semantico <- function(embeddings_matrix, tabla, metodo = "pca") {
+plot_embeddings_semantico <- function(embeddings_matrix, tabla, metodo = "pca", labels = list(title_fn = function(m) paste0("Embedding Visualization (", toupper(m), ")"), dim1_fn = function(m) paste(toupper(m), "Dimension 1"), dim2_fn = function(m) paste(toupper(m), "Dimension 2"), code = "Code")) {
   if (is.null(embeddings_matrix) || nrow(embeddings_matrix) < 3) {
     return(NULL)
   }
@@ -709,10 +711,10 @@ plot_embeddings_semantico <- function(embeddings_matrix, tabla, metodo = "pca") 
   p <- ggplot(plot_data, aes(x = X, y = Y, color = Codigo, text = Extracto)) +
     geom_point(size = 3, alpha = 0.7) +
     labs(
-      title = paste("Visualización de Embeddings (", toupper(metodo), ")", sep = ""),
-      x = paste(toupper(metodo), "Dimensión 1"),
-      y = paste(toupper(metodo), "Dimensión 2"),
-      color = "Código"
+      title = labels$title_fn(metodo),
+      x = labels$dim1_fn(metodo),
+      y = labels$dim2_fn(metodo),
+      color = labels$code
     ) +
     theme_minimal(base_size = 12) +
     theme(
@@ -724,38 +726,52 @@ plot_embeddings_semantico <- function(embeddings_matrix, tabla, metodo = "pca") 
 }
 
 # Función para validar codificación con LLM (OpenAI)
-validar_codificacion_llm <- function(fragmentos, codigos, api_key) {
+validar_codificacion_llm <- function(fragmentos, codigos, api_key, lang = "en") {
   if (is.null(fragmentos) || length(fragmentos) == 0) {
-    stop("No hay fragmentos para validar")
+    stop(if (lang == "es") "No hay fragmentos para validar" else "No fragments to validate")
   }
 
   if (is.null(api_key) || !nzchar(api_key)) {
-    stop("API Key de OpenAI no proporcionada")
+    stop(if (lang == "es") "API Key de OpenAI no proporcionada" else "OpenAI API Key not provided")
   }
 
   # Preparar prompt para validación
+  frag_label <- if (lang == "es") "Fragmento" else "Fragment"
+  code_label <- if (lang == "es") "Código" else "Code"
   fragmentos_texto <- paste(
     sapply(seq_along(fragmentos), function(i) {
-      paste0("Fragmento ", i, " [Código: ", codigos[i], "]: \"", fragmentos[i], "\"")
+      paste0(frag_label, " ", i, " [", code_label, ": ", codigos[i], "]: \"", fragmentos[i], "\"")
     }),
     collapse = "\n"
   )
 
-  prompt <- paste0(
-    "Actúa como un panel de 3 expertos en análisis cualitativo. Evalúa si los siguientes fragmentos están correctamente codificados:\n\n",
-    fragmentos_texto,
-    "\n\nPara cada fragmento, proporciona:\n",
-    "1. Evaluación (Correcto/Revisar/Incorrecto)\n",
-    "2. Justificación breve\n",
-    "3. Código alternativo sugerido (si aplica)\n\n",
-    "Responde en formato estructurado."
-  )
+  if (lang == "es") {
+    prompt <- paste0(
+      "Actúa como un panel de 3 expertos en análisis cualitativo. Evalúa si los siguientes fragmentos están correctamente codificados:\n\n",
+      fragmentos_texto,
+      "\n\nPara cada fragmento, proporciona:\n",
+      "1. Evaluación (Correcto/Revisar/Incorrecto)\n",
+      "2. Justificación breve\n",
+      "3. Código alternativo sugerido (si aplica)\n\n",
+      "Responde en formato estructurado."
+    )
+  } else {
+    prompt <- paste0(
+      "Act as a panel of 3 qualitative analysis experts. Evaluate whether the following fragments are correctly coded:\n\n",
+      fragmentos_texto,
+      "\n\nFor each fragment, provide:\n",
+      "1. Evaluation (Correct/Review/Incorrect)\n",
+      "2. Brief justification\n",
+      "3. Suggested alternative code (if applicable)\n\n",
+      "Respond in structured format."
+    )
+  }
 
   # Llamar a OpenAI
   resultado <- call_openai_api(prompt, api_key)
 
   if (is.null(resultado) || !nzchar(resultado)) {
-    stop("No se recibió respuesta de OpenAI")
+    stop(if (lang == "es") "No se recibió respuesta de OpenAI" else "No response received from OpenAI")
   }
 
   return(resultado)
@@ -772,7 +788,7 @@ OPENAI_MODEL <- "gpt-4.1"  # Modelo principal
 # ========================================
 call_openai_api <- function(prompt, api_key, system_prompt = NULL) {
   if (is.null(system_prompt)) {
-    system_prompt <- "Eres un experto en análisis cualitativo de datos textuales y codificación temática."
+    system_prompt <- "You are an expert in qualitative textual data analysis and thematic coding."
   }
 
   resp <- httr::POST(
@@ -803,6 +819,11 @@ call_openai_api <- function(prompt, api_key, system_prompt = NULL) {
 }
 
 # ========================================
+# Internationalization (i18n)
+# ========================================
+translations <- jsonlite::fromJSON("translations.json", simplifyDataFrame = FALSE)
+
+# ========================================
 # UI (actualizado con controles de descarga personalizados)
 # ========================================
 ui <- dashboardPage(
@@ -812,25 +833,17 @@ ui <- dashboardPage(
       style = "font-weight: bold; font-size: 18px; color: #fff; text-shadow: 1px 1px 2px rgba(0,0,0,0.3);",
       icon("microscope", style = "margin-right: 8px;"),
       "RCualiText"
-    ), 
-    titleWidth = 280
+    ),
+    titleWidth = 280,
+    tags$li(class = "dropdown",
+      div(style = "padding: 10px 15px; display: flex; align-items: center; gap: 8px;",
+        materialSwitch(inputId = "lang_toggle", label = "EN/ES", value = FALSE, status = "primary")
+      )
+    )
   ),
   dashboardSidebar(
     width = 280,
-    sidebarMenu(
-      id = "sidebar",
-      menuItem("Documento", tabName = "texto", icon = icon("file-text")),
-      menuItem("Códigos", tabName = "codigos", icon = icon("tags")),
-      menuItem("Categorías", tabName = "categorias", icon = icon("folder-open")),
-      menuItem("Extractos", tabName = "resaltes", icon = icon("highlighter")),
-      menuItem("Análisis", tabName = "analisis", icon = icon("chart-bar")),
-      menuItem("Análisis IA (opcional)", tabName = "analisis_ia", icon = icon("robot")),
-      menuItem("Análisis Semántico (experimental)", tabName = "analisis_semantico", icon = icon("brain")),
-      menuItem("Reporte con IA", tabName = "reporte_ia", icon = icon("file-alt")),
-      menuItem("Proyecto", tabName = "estado", icon = icon("save")),
-      menuItem("Citar", tabName = "citar", icon = icon("quote-right")),
-      menuItem("Ayuda", tabName = "info", icon = icon("info-circle"))
-    )
+    sidebarMenuOutput("dynamic_sidebar")
   ),
   dashboardBody(
     theme = bs_theme(
@@ -847,6 +860,23 @@ ui <- dashboardPage(
     tags$head(
       tags$link(href = "https://fonts.googleapis.com/css2?family=Source+Sans+Pro:wght@300;400;600;700&family=Source+Serif+Pro:wght@400;600;700&display=swap", rel = "stylesheet"),
       tags$style(HTML("
+        /* Language toggle fix */
+        .navbar-custom-menu .form-group.shiny-input-container {
+          margin-bottom: 0 !important;
+          display: inline-flex;
+          align-items: center;
+          gap: 12px;
+        }
+        .navbar-custom-menu label,
+        .navbar-custom-menu .form-group label,
+        .navbar-custom-menu .shiny-input-container label {
+          color: #fff !important;
+          font-weight: 600 !important;
+          font-size: 14px !important;
+          margin: 0 0 0 10px !important;
+          padding: 0 !important;
+        }
+
         /* ===== RCualiText - Diseño Académico Formal ===== */
 
         /* Variables de color académicas */
@@ -1508,81 +1538,81 @@ ui <- dashboardPage(
       tabItem("texto",
               fluidRow(
                 box(
-                  width = 4, 
-                  title = "Panel de Control", 
-                  status = "primary", 
-                  solidHeader = TRUE, 
+                  width = 4,
+                  title = span(id = "box_panel_control", "Control Panel"),
+                  status = "primary",
+                  solidHeader = TRUE,
                   collapsible = TRUE,
-                  fileInput("archivo", 
-                            div(icon("upload"), " Cargar Documentos"), 
-                            multiple = TRUE, 
+                  fileInput("archivo",
+                            div(icon("upload"), span(id = "lbl_cargar_docs", " Upload Documents")),
+                            multiple = TRUE,
                             accept = c(".txt", ".docx"),
-                            buttonLabel = "Examinar...",
-                            placeholder = "Ningún archivo seleccionado"),
-                  
+                            buttonLabel = "Browse...",
+                            placeholder = "No file selected"),
+
                   # Panel de modos con diseño moderno
                   div(
                     class = "info-panel",
-                    h5(icon("cog"), " Modo de Trabajo", style = "color: #2c3e50; font-weight: 600; margin-bottom: 15px;"),
+                    h5(icon("cog"), span(id = "h_modo_trabajo", " Work Mode"), style = "color: #2c3e50; font-weight: 600; margin-bottom: 15px;"),
                     div(
                       style = "display: flex; flex-wrap: wrap; gap: 8px; justify-content: center;",
                       actionButton("modeSelect",
-                                   div(icon("mouse-pointer"), " Seleccionar"),
+                                   div(icon("mouse-pointer"), span(id = "btn_mode_select", " Select")),
                                    class = "btn-primary btn-sm mode-button active"),
                       actionButton("modeDeselect",
-                                   div(icon("eraser"), " Deseleccionar"),
+                                   div(icon("eraser"), span(id = "btn_mode_deselect", " Deselect")),
                                    class = "btn-default btn-sm mode-button")
                     )
                   ),
-                  
+
                   # Controles de codificación mejorados
                   conditionalPanel(
                     condition = "input.modeSelect",
                     div(
                       style = "margin: 20px 0;",
-                      selectInput("codigoTexto", 
-                                  div(icon("tag"), " Código a Aplicar"), 
+                      selectInput("codigoTexto",
+                                  div(icon("tag"), span(id = "lbl_codigo_aplicar", " Code to Apply")),
                                   choices = NULL),
                       div(
                         class = "info-panel",
-                        checkboxInput("modoAcumulativo", 
-                                      div(icon("layer-group"), " Modo Acumulativo"), 
+                        checkboxInput("modoAcumulativo",
+                                      div(icon("layer-group"), span(id = "lbl_modo_acumulativo", " Accumulative Mode")),
                                       value = TRUE),
-                        helpText("Permite aplicar múltiples códigos al mismo fragmento", 
+                        helpText(span(id = "help_modo_acumulativo", "Allows applying multiple codes to the same fragment"),
                                  style = "color: #7f8c8d; font-size: 12px;")
                       )
                     )
                   ),
-                  
+
                   # Controles de navegación mejorados
                   div(
                     style = "margin: 20px 0;",
-                    h5(icon("arrows-alt-h"), " Navegación", style = "color: #2c3e50; font-weight: 600; margin-bottom: 15px;"),
+                    h5(icon("arrows-alt-h"), span(id = "h_navegacion", " Navigation"), style = "color: #2c3e50; font-weight: 600; margin-bottom: 15px;"),
                     fluidRow(
                       column(6, actionButton("prev_doc",
-                                             div(icon("chevron-left"), " Anterior"),
+                                             div(icon("chevron-left"), span(id = "btn_anterior", " Previous")),
                                              class = "btn-default btn-sm btn-block")),
                       column(6, actionButton("next_doc",
-                                             div(icon("chevron-right"), " Siguiente"),
+                                             div(icon("chevron-right"), span(id = "btn_siguiente", " Next")),
                                              class = "btn-default btn-sm btn-block"))
                     )
                   ),
-                  
+
                   # Botones de acción mejorados
                   div(
                     style = "margin: 20px 0;",
-                    h5(icon("tools"), " Acciones", style = "color: #2c3e50; font-weight: 600; margin-bottom: 15px;"),
+                    h5(icon("tools"), span(id = "h_acciones", " Actions"), style = "color: #2c3e50; font-weight: 600; margin-bottom: 15px;"),
                     div(
                       style = "display: flex; flex-wrap: wrap; gap: 8px;",
                       actionButton("limpiarResaltados",
-                                   div(icon("broom"), " Limpiar"),
+                                   div(icon("broom"), span(id = "btn_limpiar", " Clear")),
                                    class = "btn-default btn-sm"),
                       actionButton("ayuda",
-                                   div(icon("question-circle"), " Ayuda"),
+                                   div(icon("question-circle"), span(id = "btn_ayuda", " Help")),
                                    class = "btn-info btn-sm")
                     )
                   ),
-                  
+
                   # Info del documento
                   div(
                     class = "info-panel",
@@ -1590,9 +1620,9 @@ ui <- dashboardPage(
                   )
                 ),
                 box(
-                  width = 8, 
-                  title = "Visor de Documento", 
-                  status = "primary", 
+                  width = 8,
+                  title = span(id = "box_visor_documento", "Document Viewer"),
+                  status = "primary",
                   solidHeader = TRUE,
                   div(
                     id = "document-viewer",
@@ -1620,20 +1650,20 @@ ui <- dashboardPage(
       tabItem("codigos",
               fluidRow(
                 box(
-                  width = 4, 
-                  title = "Gestión de Códigos", 
-                  status = "primary", 
+                  width = 4,
+                  title = span(id = "box_gestion_codigos", "Code Management"),
+                  status = "primary",
                   solidHeader = TRUE,
                   div(
                     style = "space-y: 20px;",
-                    textInput("new_codigo", 
-                              div(icon("tag"), " Nombre del Código"), 
+                    textInput("new_codigo",
+                              div(icon("tag"), span(id = "lbl_nombre_codigo", " Code Name")),
                               value = "",
-                              placeholder = "Ej: Emociones positivas"),
-                    
+                              placeholder = "E.g.: Positive emotions"),
+
                     div(
                       style = "margin: 20px 0;",
-                      h5(icon("palette"), " Color del Código", style = "color: #2c3e50; margin-bottom: 10px;"),
+                      h5(icon("palette"), span(id = "h_color_codigo", " Code Color"), style = "color: #2c3e50; margin-bottom: 10px;"),
                       colourInput("new_color", 
                                   label = NULL, 
                                   value = "#3498db",
@@ -1647,18 +1677,18 @@ ui <- dashboardPage(
                     div(
                       style = "display: flex; gap: 10px; margin-top: 25px;",
                       actionButton("addOrUpdateCodigo",
-                                   div(icon("save"), " Guardar"),
+                                   div(icon("save"), span(id = "btn_guardar_codigo", " Save")),
                                    class = "btn-primary btn-sm"),
                       actionButton("deleteCodigo",
-                                   div(icon("trash"), " Eliminar"),
+                                   div(icon("trash"), span(id = "btn_eliminar_codigo", " Delete")),
                                    class = "btn-default btn-sm")
                     )
                   )
                 ),
                 box(
-                  width = 8, 
-                  title = "Lista de Códigos", 
-                  status = "primary", 
+                  width = 8,
+                  title = span(id = "box_lista_codigos", "Code List"),
+                  status = "primary",
                   solidHeader = TRUE,
                   DTOutput("tablaCodigos") %>% withSpinner(type = 4, color = "#5a6c7d")
                 )
@@ -1669,42 +1699,42 @@ ui <- dashboardPage(
       tabItem("categorias",
               fluidRow(
                 box(
-                  width = 4, 
+                  width = 4,
                   height = 600,
-                  title = "Gestión de Categorías", 
-                  status = "primary", 
+                  title = span(id = "box_gestion_categorias", "Category Management"),
+                  status = "primary",
                   solidHeader = TRUE,
                   div(
-                    textInput("new_categoria", 
-                              div(icon("folder"), " Nombre de Categoría"), 
+                    textInput("new_categoria",
+                              div(icon("folder"), span(id = "lbl_nombre_categoria", " Category Name")),
                               value = "",
-                              placeholder = "Ej: Aspectos emocionales"),
-                    
+                              placeholder = "E.g.: Emotional aspects"),
+
                     div(
                       style = "margin: 20px 0;",
-                      selectizeInput("codigos_for_categoria", 
-                                     div(icon("tags"), " Códigos Asociados"), 
-                                     choices = NULL, 
+                      selectizeInput("codigos_for_categoria",
+                                     div(icon("tags"), span(id = "lbl_codigos_asociados", " Associated Codes")),
+                                     choices = NULL,
                                      multiple = TRUE,
-                                     options = list(placeholder = "Selecciona códigos..."))
+                                     options = list(placeholder = "Select codes..."))
                     ),
-                    
+
                     div(
                       style = "display: flex; gap: 10px; margin-top: 25px;",
                       actionButton("addOrUpdateCategoria",
-                                   div(icon("save"), " Guardar"),
+                                   div(icon("save"), span(id = "btn_guardar_cat", " Save")),
                                    class = "btn-primary btn-sm"),
                       actionButton("deleteCategoria",
-                                   div(icon("trash"), " Eliminar"),
+                                   div(icon("trash"), span(id = "btn_eliminar_cat", " Delete")),
                                    class = "btn-default btn-sm")
                     )
                   )
                 ),
                 box(
-                  width = 8, 
+                  width = 8,
                   height = 600,
-                  title = "Categorías Definidas", 
-                  status = "primary", 
+                  title = span(id = "box_categorias_definidas", "Defined Categories"),
+                  status = "primary",
                   solidHeader = TRUE,
                   DTOutput("tablaCategorias") %>% withSpinner(type = 4, color = "#5a6c7d")
                 )
@@ -1715,57 +1745,57 @@ ui <- dashboardPage(
       tabItem("resaltes",
               fluidRow(
                 box(
-                  width = 12, 
-                  title = "Gestión de Extractos Codificados", 
-                  status = "primary", 
+                  width = 12,
+                  title = span(id = "box_gestion_extractos", "Coded Extract Management"),
+                  status = "primary",
                   solidHeader = TRUE,
-                  
+
                   # Panel de controles mejorado
                   div(
                     class = "info-panel",
-                    h5(icon("cogs"), " Herramientas de Gestión", style = "color: #2c3e50; margin-bottom: 15px;"),
+                    h5(icon("cogs"), span(id = "h_herramientas", " Management Tools"), style = "color: #2c3e50; margin-bottom: 15px;"),
                     fluidRow(
                       column(4,
                              downloadButton("descarga",
-                                            div(icon("download"), " Exportar XLSX"),
+                                            div(icon("download"), span(id = "btn_exportar_xlsx", " Export XLSX")),
                                             class = "btn-primary btn-sm btn-block")),
                       column(4,
                              actionButton("eliminarResalte",
-                                          div(icon("minus-circle"), " Eliminar Seleccionado"),
+                                          div(icon("minus-circle"), span(id = "btn_eliminar_seleccionado", " Delete Selected")),
                                           class = "btn-default btn-sm btn-block")),
                       column(4,
                              actionButton("eliminarTodosResaltes",
-                                          div(icon("trash-alt"), " Limpiar Todo"),
+                                          div(icon("trash-alt"), span(id = "btn_limpiar_todo", " Clear All")),
                                           class = "btn-default btn-sm btn-block"))
                     )
                   ),
-                  
+
                   # Tabla de resaltados
                   DTOutput("tablaResaltes") %>% withSpinner(type = 4, color = "#5a6c7d"),
-                  
+
                   # Panel informativo mejorado
                   div(
                     class = "info-panel",
                     style = "margin-top: 20px;",
-                    h5(icon("info-circle"), " Guía de Resaltados", style = "color: #2c3e50; margin-bottom: 15px;"),
+                    h5(icon("info-circle"), span(id = "h_guia_resaltados", " Highlight Guide"), style = "color: #2c3e50; margin-bottom: 15px;"),
                     div(
                       style = "display: grid; grid-template-columns: 1fr 1fr; gap: 15px;",
                       div(
-                        h6(icon("paint-brush"), " Visualización", style = "color: #2c3e50; margin-bottom: 8px;"),
+                        h6(icon("paint-brush"), span(id = "h_visualizacion_ext", " Visualization"), style = "color: #2c3e50; margin-bottom: 8px;"),
                         tags$ul(
                           style = "font-size: 13px; color: #7f8c8d;",
-                          tags$li("Gradientes indican múltiples códigos"),
-                          tags$li("Hover muestra códigos aplicados"),
-                          tags$li("Cada fila = un código por fragmento")
+                          tags$li(span(id = "li_gradientes", "Gradients indicate multiple codes")),
+                          tags$li(span(id = "li_hover", "Hover shows applied codes")),
+                          tags$li(span(id = "li_cada_fila", "Each row = one code per fragment"))
                         )
                       ),
                       div(
-                        h6(icon("edit"), " Edición", style = "color: #2c3e50; margin-bottom: 8px;"),
+                        h6(icon("edit"), span(id = "h_edicion_ext", " Editing"), style = "color: #2c3e50; margin-bottom: 8px;"),
                         tags$ul(
                           style = "font-size: 13px; color: #7f8c8d;",
-                          tags$li("Modo deseleccionar para eliminar"),
-                          tags$li("Selección múltiple disponible"),
-                          tags$li("Exportación completa a Excel")
+                          tags$li(span(id = "li_modo_desel", "Deselect mode to remove")),
+                          tags$li(span(id = "li_seleccion_mult", "Multiple selection available")),
+                          tags$li(span(id = "li_exportacion", "Full export to Excel"))
                         )
                       )
                     )
@@ -1778,60 +1808,60 @@ ui <- dashboardPage(
       tabItem("analisis",
               fluidRow(
                 box(
-                  width = 3, 
-                  title = "Configuración", 
-                  status = "primary", 
-                  solidHeader = TRUE, 
+                  width = 3,
+                  title = span(id = "box_configuracion_analisis", "Settings"),
+                  status = "primary",
+                  solidHeader = TRUE,
                   collapsible = TRUE,
                   div(
                     class = "info-panel",
-                    h5(icon("chart-bar"), " Opciones Visuales", style = "color: #2c3e50; margin-bottom: 15px;"),
-                    prettySwitch("fillToggle", 
-                                 "Colorear por Categoría", 
-                                 value = TRUE, 
+                    h5(icon("chart-bar"), span(id = "h_opciones_visuales", " Visual Options"), style = "color: #2c3e50; margin-bottom: 15px;"),
+                    prettySwitch("fillToggle",
+                                 span(id = "lbl_colorear_categoria", "Color by Category"),
+                                 value = TRUE,
                                  status = "primary",
                                  fill = TRUE)
                   ),
-                  
+
                   # Controles de descarga personalizados
                   div(
                     class = "download-controls-container",
-                    h5(icon("cogs"), " Configuración de Descarga", style = "color: #2c3e50; margin-bottom: 15px;"),
+                    h5(icon("cogs"), span(id = "h_config_descarga", " Download Settings"), style = "color: #2c3e50; margin-bottom: 15px;"),
                     
                     fluidRow(
                       column(6,
-                             numericInput("plot_width", 
-                                          div(icon("arrows-alt-h"), " Ancho (pulg)"), 
-                                          value = 12, 
-                                          min = 5, 
-                                          max = 20, 
+                             numericInput("plot_width",
+                                          div(icon("arrows-alt-h"), span(id = "lbl_ancho", " Width (in)")),
+                                          value = 12,
+                                          min = 5,
+                                          max = 20,
                                           step = 0.5)
                       ),
                       column(6,
-                             numericInput("plot_height", 
-                                          div(icon("arrows-alt-v"), " Alto (pulg)"), 
-                                          value = 8, 
-                                          min = 4, 
-                                          max = 16, 
+                             numericInput("plot_height",
+                                          div(icon("arrows-alt-v"), span(id = "lbl_alto", " Height (in)")),
+                                          value = 8,
+                                          min = 4,
+                                          max = 16,
                                           step = 0.5)
                       )
                     ),
-                    
-                    numericInput("plot_dpi", 
-                                 div(icon("expand"), " Resolución (DPI)"), 
-                                 value = 600, 
-                                 min = 150, 
-                                 max = 1200, 
+
+                    numericInput("plot_dpi",
+                                 div(icon("expand"), span(id = "lbl_dpi", " Resolution (DPI)")),
+                                 value = 600,
+                                 min = 150,
+                                 max = 1200,
                                  step = 50),
-                    
-                    helpText("Configuración aplicada a ambos gráficos", 
+
+                    helpText(span(id = "help_config_aplicada", "Configuration applied to both charts"),
                              style = "color: #7f8c8d; font-size: 12px; margin-top: 10px;")
                   )
                 ),
                 box(
                   width = 9,
                   height = 650,
-                  title = "Distribución de Códigos",
+                  title = span(id = "box_distribucion_codigos", "Code Distribution"),
                   status = "primary",
                   solidHeader = TRUE,
                   
@@ -1840,24 +1870,24 @@ ui <- dashboardPage(
                 ),
                 box(
                   width = 3,
-                  title = "Exportar",
+                  title = span(id = "box_exportar_analisis", "Export"),
                   status = "primary",
                   solidHeader = TRUE,
                   downloadButton("download_distribucion_jpg",
-                                 div(icon("download"), " Distribución (JPG)"),
+                                 div(icon("download"), span(id = "btn_dist_jpg", " Distribution (JPG)")),
                                  class = "btn-primary btn-sm btn-block")
                 )
               ),
               fluidRow(
                 box(
                   width = 12,
-                  title = "Exportar Red",
+                  title = span(id = "box_exportar_red", "Export Network"),
                   status = "primary",
                   solidHeader = TRUE,
                   collapsible = TRUE,
                   collapsed = TRUE,
                   downloadButton("download_red_jpg",
-                                 div(icon("download"), " Red de Coocurrencia (JPG)"),
+                                 div(icon("download"), span(id = "btn_red_jpg", " Co-occurrence Network (JPG)")),
                                  class = "btn-primary btn-sm")
                 )
               ),
@@ -1865,7 +1895,7 @@ ui <- dashboardPage(
                 box(
                   width = 12,
                   height = 750,
-                  title = "Red de Coocurrencia y Análisis de Centralidad",
+                  title = span(id = "box_red_coocurrencia", "Co-occurrence Network and Centrality Analysis"),
                   status = "primary",
                   solidHeader = TRUE,
                   
@@ -1880,22 +1910,22 @@ ui <- dashboardPage(
               fluidRow(
                 box(
                   width = 4,
-                  title = "Configuración del Análisis IA",
+                  title = span(id = "box_config_ia", "AI Analysis Settings"),
                   status = "primary",
                   solidHeader = TRUE,
                   div(
                     class = "info-panel",
-                    h5(icon("key"), " Configuración de OpenAI", style = "color: #2c3e50; margin-bottom: 15px;"),
+                    h5(icon("key"), span(id = "h_config_openai", " OpenAI Settings"), style = "color: #2c3e50; margin-bottom: 15px;"),
                     passwordInput("openai_api_key",
-                                  div(icon("lock"), " API Key de OpenAI"),
+                                  div(icon("lock"), span(id = "lbl_api_key", " OpenAI API Key")),
                                   placeholder = "sk-..."),
-                    helpText("Usa el modelo GPT-4.1 de OpenAI. Obtén tu API Key en platform.openai.com",
+                    helpText(span(id = "help_api_key", "Uses the GPT-4.1 model from OpenAI. Get your API Key at platform.openai.com"),
                              style = "color: #7f8c8d; font-size: 12px;"),
                     div(
                       style = "margin-top: 10px; padding: 10px; background: #e8f4f8; border-radius: 5px;",
                       tags$small(
                         icon("info-circle"),
-                        " El análisis requiere una API Key válida de OpenAI.",
+                        span(id = "info_api_key_req", " The analysis requires a valid OpenAI API Key."),
                         style = "color: #2980b9;"
                       )
                     )
@@ -1904,52 +1934,52 @@ ui <- dashboardPage(
                   div(
                     class = "info-panel",
                     style = "margin-top: 20px;",
-                    h5(icon("book"), " Diccionario de Códigos", style = "color: #2c3e50; margin-bottom: 15px;"),
+                    h5(icon("book"), span(id = "h_diccionario", " Code Dictionary"), style = "color: #2c3e50; margin-bottom: 15px;"),
                     fileInput("dict_ia",
-                              div(icon("upload"), " Cargar Diccionario"),
+                              div(icon("upload"), span(id = "lbl_cargar_dict", " Upload Dictionary")),
                               accept = c(".csv", ".xlsx"),
-                              buttonLabel = "Examinar...",
-                              placeholder = "Archivo .csv o .xlsx"),
-                    helpText("Debe tener columnas: Categoría, Código, Definición",
+                              buttonLabel = "Browse...",
+                              placeholder = ".csv or .xlsx file"),
+                    helpText(span(id = "help_columnas_req", "Must have columns: Category, Code, Definition"),
                              style = "color: #7f8c8d; font-size: 12px;")
                   ),
-                  
+
                   div(
                     style = "margin-top: 25px;",
                     actionButton("run_ia_analysis",
-                                 div(icon("play"), " Ejecutar Análisis IA"),
+                                 div(icon("play"), span(id = "btn_ejecutar_ia", " Run AI Analysis")),
                                  class = "btn-primary btn-block", style = "margin-bottom: 10px;"),
                     downloadButton("download_ia_results",
-                                   div(icon("download"), " Descargar Resultados (.xlsx)"),
+                                   div(icon("download"), span(id = "btn_descargar_resultados", " Download Results (.xlsx)")),
                                    class = "btn-default btn-block"),
-                    helpText("Los resultados se mostrarán abajo. Descarga la tabla en Excel con el botón de arriba.",
+                    helpText(span(id = "help_resultados", "Results will be shown below. Download the table in Excel with the button above."),
                              style = "color: #7f8c8d; font-size: 12px; margin-top: 10px;")
                   )
                 ),
                 box(
                   width = 8,
-                  title = "Resultados del Análisis IA",
+                  title = span(id = "box_resultados_ia", "AI Analysis Results"),
                   status = "primary",
                   solidHeader = TRUE,
                   div(
                     class = "info-panel",
-                    h5(icon("info-circle"), " Instrucciones", style = "color: #2c3e50;"),
-                    p("1. Asegúrate de tener documentos cargados en la pestaña 'Documento'",
+                    h5(icon("info-circle"), span(id = "h_instrucciones_ia", " Instructions"), style = "color: #2c3e50;"),
+                    p(span(id = "p_instruccion_1", "1. Make sure you have documents uploaded in the 'Document' tab"),
                       style = "color: #7f8c8d;"),
-                    p("2. Ingresa tu API Key de OpenAI",
+                    p(span(id = "p_instruccion_2", "2. Enter your OpenAI API Key"),
                       style = "color: #7f8c8d;"),
-                    p("3. Carga un diccionario de códigos con las columnas: Categoría, Código, Definición",
+                    p(span(id = "p_instruccion_3", "3. Upload a code dictionary with columns: Category, Code, Definition"),
                       style = "color: #7f8c8d;"),
-                    p("4. Ejecuta el análisis y revisa los resultados",
+                    p(span(id = "p_instruccion_4", "4. Run the analysis and review the results"),
                       style = "color: #7f8c8d;"),
-                    p("5. Si estás satisfecho, integra los resultados al análisis manual",
+                    p(span(id = "p_instruccion_5", "5. If satisfied, integrate the results into your manual analysis"),
                       style = "color: #7f8c8d;")
                   ),
                   DTOutput("tabla_ia_results") %>% withSpinner(type = 6, color = "#5a6c7d"),
                   div(
                     style = "margin-top: 15px;",
                     downloadButton("download_tabla_ia_excel",
-                                   div(icon("file-excel"), " Descargar Tabla (Excel)"),
+                                   div(icon("file-excel"), span(id = "btn_descargar_tabla_excel", " Download Table (Excel)")),
                                    class = "btn-success btn-sm")
                   )
                 )
@@ -1959,14 +1989,14 @@ ui <- dashboardPage(
               fluidRow(
                 box(
                   width = 12,
-                  title = "Visualización de Resultados IA",
+                  title = span(id = "box_visualizacion_ia", "AI Results Visualization"),
                   status = "primary",
                   solidHeader = TRUE,
                   collapsible = TRUE,
 
                   fluidRow(
                     column(6,
-                           h5(icon("chart-bar"), " Distribución de Códigos", style = "color: #2c3e50; margin-bottom: 15px;"),
+                           h5(icon("chart-bar"), span(id = "h_dist_codigos_ia", " Code Distribution"), style = "color: #2c3e50; margin-bottom: 15px;"),
                            plotlyOutput("plot_ia_distribucion", height = "400px") %>%
                              withSpinner(type = 6, color = "#5a6c7d"),
                            div(style = "margin-top: 10px;",
@@ -1975,7 +2005,7 @@ ui <- dashboardPage(
                                               class = "btn-primary btn-sm"))
                     ),
                     column(6,
-                           h5(icon("chart-pie"), " Fragmentos por Categoría", style = "color: #2c3e50; margin-bottom: 15px;"),
+                           h5(icon("chart-pie"), span(id = "h_frag_categoria_ia", " Fragments by Category"), style = "color: #2c3e50; margin-bottom: 15px;"),
                            plotlyOutput("plot_ia_categorias", height = "400px") %>%
                              withSpinner(type = 6, color = "#5a6c7d"),
                            div(style = "margin-top: 10px;",
@@ -1994,23 +2024,23 @@ ui <- dashboardPage(
                 # Panel de Configuración
                 box(
                   width = 4,
-                  title = "Configuración del Análisis Semántico",
+                  title = span(id = "box_config_semantico", "Semantic Analysis Settings"),
                   status = "primary",
                   solidHeader = TRUE,
 
                   div(
                     class = "info-panel",
-                    h5(icon("key"), " Configuración", style = "color: #2c3e50; margin-bottom: 15px;"),
-                    p("Este módulo utiliza la API de OpenAI para generar embeddings y análisis semántico.",
+                    h5(icon("key"), span(id = "h_config_sem", " Settings"), style = "color: #2c3e50; margin-bottom: 15px;"),
+                    p(span(id = "p_modulo_info", "This module uses the OpenAI API to generate embeddings and semantic analysis."),
                       style = "color: #7f8c8d; font-size: 12px;"),
                     tags$small(
                       icon("info-circle"),
-                      " Modelo de embeddings: text-embedding-3-small",
+                      span(id = "info_modelo_emb", " Embedding model: text-embedding-3-small"),
                       style = "color: #2980b9; display: block; margin-top: 10px;"
                     ),
                     tags$small(
                       icon("info-circle"),
-                      " Ingresa tu API Key de OpenAI en la pestaña 'Análisis IA'",
+                      span(id = "info_api_key_sem", " Enter your OpenAI API Key in the 'AI Analysis' tab"),
                       style = "color: #2980b9; display: block; margin-top: 5px;"
                     )
                   ),
@@ -2018,9 +2048,9 @@ ui <- dashboardPage(
                   div(
                     style = "margin-top: 20px;",
                     actionButton("btn_generar_embeddings",
-                                 div(icon("brain"), " Generar Embeddings"),
+                                 div(icon("brain"), span(id = "btn_gen_emb", " Generate Embeddings")),
                                  class = "btn-primary btn-block"),
-                    helpText("Genera representaciones vectoriales de los fragmentos codificados usando OpenAI",
+                    helpText(span(id = "help_gen_emb", "Generates vector representations of coded fragments using OpenAI"),
                              style = "color: #7f8c8d; font-size: 11px; margin-top: 8px;")
                   ),
 
@@ -2035,18 +2065,18 @@ ui <- dashboardPage(
                 # Panel de Funcionalidades
                 box(
                   width = 8,
-                  title = "Herramientas de Análisis Semántico",
+                  title = span(id = "box_herramientas_sem", "Semantic Analysis Tools"),
                   status = "primary",
                   solidHeader = TRUE,
 
                   div(
                     class = "info-panel",
-                    h5(icon("info-circle"), " Requisitos", style = "color: #2c3e50; margin-bottom: 10px;"),
-                    p("1. Ten fragmentos codificados (usa 'Análisis IA' o codifica manualmente)",
+                    h5(icon("info-circle"), span(id = "h_requisitos_sem", " Requirements"), style = "color: #2c3e50; margin-bottom: 10px;"),
+                    p(span(id = "p_req_1", "1. Have coded fragments (use 'AI Analysis' or code manually)"),
                       style = "color: #7f8c8d; margin: 3px 0;"),
-                    p("2. Genera los embeddings (usa tokens internos automáticamente)",
+                    p(span(id = "p_req_2", "2. Generate embeddings (uses internal tokens automatically)"),
                       style = "color: #7f8c8d; margin: 3px 0;"),
-                    p("3. Explora las herramientas de análisis semántico",
+                    p(span(id = "p_req_3", "3. Explore the semantic analysis tools"),
                       style = "color: #7f8c8d; margin: 3px 0;")
                   ),
 
@@ -2058,10 +2088,10 @@ ui <- dashboardPage(
                     div(
                       class = "semantico-card",
                       style = "background: #ffffff; padding: 15px; border-radius: 6px; border: 1px solid #e0e4e8;",
-                      h5(icon("object-group"), " Clustering Semántico", style = "color: #2c3e50; margin-bottom: 10px; font-weight: 600;"),
-                      p("Agrupa fragmentos similares automáticamente", style = "color: #7f8c8d; font-size: 12px; margin-bottom: 10px;"),
-                      numericInput("n_clusters_semantico", "Número de clusters", value = 3, min = 2, max = 20, step = 1),
-                      actionButton("btn_clustering", div(icon("sitemap"), " Ejecutar Clustering"),
+                      h5(icon("object-group"), span(id = "h_clustering", " Semantic Clustering"), style = "color: #2c3e50; margin-bottom: 10px; font-weight: 600;"),
+                      p(span(id = "p_clustering_desc", "Automatically groups similar fragments"), style = "color: #7f8c8d; font-size: 12px; margin-bottom: 10px;"),
+                      numericInput("n_clusters_semantico", span(id = "lbl_num_clusters", "Number of clusters"), value = 3, min = 2, max = 20, step = 1),
+                      actionButton("btn_clustering", div(icon("sitemap"), span(id = "btn_ejecutar_clustering", " Run Clustering")),
                                    class = "btn-primary btn-sm btn-block")
                     ),
 
@@ -2069,10 +2099,10 @@ ui <- dashboardPage(
                     div(
                       class = "semantico-card",
                       style = "background: #ffffff; padding: 15px; border-radius: 6px; border: 1px solid #e0e4e8;",
-                      h5(icon("exchange-alt"), " Detección de Similitud", style = "color: #2c3e50; margin-bottom: 10px; font-weight: 600;"),
-                      p("Encuentra fragmentos similares con diferente código", style = "color: #7f8c8d; font-size: 12px; margin-bottom: 10px;"),
-                      sliderInput("umbral_similitud", "Umbral de similitud", min = 0.5, max = 0.95, value = 0.8, step = 0.05),
-                      actionButton("btn_similitud", div(icon("search"), " Detectar Similares"),
+                      h5(icon("exchange-alt"), span(id = "h_similitud", " Similarity Detection"), style = "color: #2c3e50; margin-bottom: 10px; font-weight: 600;"),
+                      p(span(id = "p_similitud_desc", "Finds similar fragments with different codes"), style = "color: #7f8c8d; font-size: 12px; margin-bottom: 10px;"),
+                      sliderInput("umbral_similitud", span(id = "lbl_umbral_sim", "Similarity threshold"), min = 0.5, max = 0.95, value = 0.8, step = 0.05),
+                      actionButton("btn_similitud", div(icon("search"), span(id = "btn_detectar_sim", " Detect Similar")),
                                    class = "btn-primary btn-sm btn-block")
                     ),
 
@@ -2080,12 +2110,12 @@ ui <- dashboardPage(
                     div(
                       class = "semantico-card",
                       style = "background: #ffffff; padding: 15px; border-radius: 6px; border: 1px solid #e0e4e8;",
-                      h5(icon("project-diagram"), " Visualización 2D", style = "color: #2c3e50; margin-bottom: 10px; font-weight: 600;"),
-                      p("Visualiza la distribución semántica de fragmentos", style = "color: #7f8c8d; font-size: 12px; margin-bottom: 10px;"),
-                      selectInput("metodo_visualizacion", "Método de reducción",
+                      h5(icon("project-diagram"), span(id = "h_vis_2d", " 2D Visualization"), style = "color: #2c3e50; margin-bottom: 10px; font-weight: 600;"),
+                      p(span(id = "p_vis_desc", "Visualizes the semantic distribution of fragments"), style = "color: #7f8c8d; font-size: 12px; margin-bottom: 10px;"),
+                      selectInput("metodo_visualizacion", span(id = "lbl_metodo_red", "Reduction method"),
                                   choices = c("PCA" = "pca", "t-SNE" = "tsne", "UMAP" = "umap"),
                                   selected = "pca"),
-                      actionButton("btn_visualizar", div(icon("chart-area"), " Visualizar"),
+                      actionButton("btn_visualizar", div(icon("chart-area"), span(id = "btn_visualizar_lbl", " Visualize")),
                                    class = "btn-primary btn-sm btn-block")
                     ),
 
@@ -2093,10 +2123,10 @@ ui <- dashboardPage(
                     div(
                       class = "semantico-card",
                       style = "background: #ffffff; padding: 15px; border-radius: 6px; border: 1px solid #e0e4e8;",
-                      h5(icon("check-double"), " Análisis de Coherencia", style = "color: #2c3e50; margin-bottom: 10px; font-weight: 600;"),
-                      p("Evalúa la homogeneidad semántica de cada código", style = "color: #7f8c8d; font-size: 12px; margin-bottom: 10px;"),
+                      h5(icon("check-double"), span(id = "h_coherencia", " Coherence Analysis"), style = "color: #2c3e50; margin-bottom: 10px; font-weight: 600;"),
+                      p(span(id = "p_coherencia_desc", "Evaluates the semantic homogeneity of each code"), style = "color: #7f8c8d; font-size: 12px; margin-bottom: 10px;"),
                       br(),
-                      actionButton("btn_coherencia", div(icon("tasks"), " Analizar Coherencia"),
+                      actionButton("btn_coherencia", div(icon("tasks"), span(id = "btn_analizar_coh", " Analyze Coherence")),
                                    class = "btn-primary btn-sm btn-block")
                     )
                   ),
@@ -2107,14 +2137,14 @@ ui <- dashboardPage(
                     div(
                       class = "semantico-card",
                       style = "background: #ffffff; padding: 15px; border-radius: 6px; border: 1px solid #e0e4e8;",
-                      h5(icon("user-check"), " Validación con LLM (Panel de Expertos Virtual)", style = "color: #2c3e50; margin-bottom: 10px; font-weight: 600;"),
-                      p("Un modelo de lenguaje evalúa la calidad de tu codificación", style = "color: #7f8c8d; font-size: 12px; margin-bottom: 10px;"),
+                      h5(icon("user-check"), span(id = "h_validacion_llm", " LLM Validation (Virtual Expert Panel)"), style = "color: #2c3e50; margin-bottom: 10px; font-weight: 600;"),
+                      p(span(id = "p_validacion_desc", "A language model evaluates the quality of your coding"), style = "color: #7f8c8d; font-size: 12px; margin-bottom: 10px;"),
                       fluidRow(
                         column(8,
-                               numericInput("n_fragmentos_validar", "Fragmentos a validar (muestra)", value = 10, min = 1, max = 50, step = 1)
+                               numericInput("n_fragmentos_validar", span(id = "lbl_frag_validar", "Fragments to validate (sample)"), value = 10, min = 1, max = 50, step = 1)
                         ),
                         column(4,
-                               actionButton("btn_validacion", div(icon("gavel"), " Validar"),
+                               actionButton("btn_validacion", div(icon("gavel"), span(id = "btn_validar", " Validate")),
                                             class = "btn-primary btn-sm btn-block")
                         )
                       )
@@ -2127,7 +2157,7 @@ ui <- dashboardPage(
               fluidRow(
                 box(
                   width = 12,
-                  title = div(icon("download"), " Configuración de Descarga de Figuras"),
+                  title = div(icon("download"), span(id = "box_config_descarga_fig", " Figure Download Settings")),
                   status = "info",
                   solidHeader = TRUE,
                   collapsible = TRUE,
@@ -2151,7 +2181,7 @@ ui <- dashboardPage(
                     ),
                     column(3,
                       div(style = "margin-top: 25px;",
-                        helpText(icon("info-circle"), " Ajusta las dimensiones antes de descargar",
+                        helpText(icon("info-circle"), span(id = "help_ajusta_dim", " Adjust dimensions before downloading"),
                                  style = "color: #7f8c8d; font-size: 11px;")
                       )
                     )
@@ -2163,7 +2193,7 @@ ui <- dashboardPage(
               fluidRow(
                 box(
                   width = 12,
-                  title = "Resultados del Análisis Semántico",
+                  title = span(id = "box_resultados_sem", "Semantic Analysis Results"),
                   status = "primary",
                   solidHeader = TRUE,
                   collapsible = TRUE,
@@ -2173,7 +2203,7 @@ ui <- dashboardPage(
                     type = "pills",
 
                     tabPanel(
-                      title = div(icon("object-group"), " Clustering"),
+                      title = div(icon("object-group"), span(id = "tab_clustering_lbl", " Clustering")),
                       value = "tab_clustering",
                       div(
                         style = "padding: 15px;",
@@ -2188,7 +2218,7 @@ ui <- dashboardPage(
                     ),
 
                     tabPanel(
-                      title = div(icon("exchange-alt"), " Similitud"),
+                      title = div(icon("exchange-alt"), span(id = "tab_similitud_lbl", " Similarity")),
                       value = "tab_similitud",
                       div(
                         style = "padding: 15px;",
@@ -2201,7 +2231,7 @@ ui <- dashboardPage(
                     ),
 
                     tabPanel(
-                      title = div(icon("project-diagram"), " Visualización"),
+                      title = div(icon("project-diagram"), span(id = "tab_vis_lbl", " Visualization")),
                       value = "tab_visualizacion",
                       div(
                         style = "padding: 15px;",
@@ -2214,7 +2244,7 @@ ui <- dashboardPage(
                     ),
 
                     tabPanel(
-                      title = div(icon("check-double"), " Coherencia"),
+                      title = div(icon("check-double"), span(id = "tab_coherencia_lbl", " Coherence")),
                       value = "tab_coherencia",
                       div(
                         style = "padding: 15px;",
@@ -2229,7 +2259,7 @@ ui <- dashboardPage(
                     ),
 
                     tabPanel(
-                      title = div(icon("project-diagram"), " Red Semántica"),
+                      title = div(icon("project-diagram"), span(id = "tab_red_sem_lbl", " Semantic Network")),
                       value = "tab_red_semantica",
                       div(
                         style = "padding: 15px;",
@@ -2238,23 +2268,23 @@ ui <- dashboardPage(
                             div(
                               class = "info-panel",
                               style = "padding: 15px; margin-bottom: 15px;",
-                              h5(icon("sliders-h"), " Configuración", style = "color: #2c3e50; margin-bottom: 15px;"),
+                              h5(icon("sliders-h"), span(id = "h_config_red", " Settings"), style = "color: #2c3e50; margin-bottom: 15px;"),
                               sliderInput("umbral_red_semantica",
-                                          "Umbral de conexión (similitud)",
+                                          span(id = "lbl_umbral_conexion", "Connection threshold (similarity)"),
                                           min = 0.2, max = 0.9, value = 0.4, step = 0.05),
-                              helpText("Códigos con similitud mayor al umbral se conectan",
+                              helpText(span(id = "help_umbral_conexion", "Codes with similarity above the threshold are connected"),
                                        style = "color: #7f8c8d; font-size: 11px;"),
                               selectInput("color_red_semantica",
-                                          "Colorear por",
-                                          choices = c("Categoría" = "categoria", "Comunidad (detectada)" = "comunidad"),
+                                          span(id = "lbl_colorear_por", "Color by"),
+                                          choices = c("Category" = "categoria", "Community (detected)" = "comunidad"),
                                           selected = "categoria"),
                               actionButton("btn_generar_red",
-                                           div(icon("project-diagram"), " Generar Red"),
+                                           div(icon("project-diagram"), span(id = "btn_gen_red", " Generate Network")),
                                            class = "btn-primary btn-block",
                                            style = "margin-top: 15px;"),
                               div(style = "margin-top: 15px;",
                                   downloadButton("download_red_semantica_png",
-                                                 div(icon("image"), " Descargar PNG"),
+                                                 div(icon("image"), span(id = "btn_descargar_png", " Download PNG")),
                                                  class = "btn-success btn-sm btn-block"))
                             )
                           ),
@@ -2271,7 +2301,7 @@ ui <- dashboardPage(
                     ),
 
                     tabPanel(
-                      title = div(icon("user-check"), " Validación LLM"),
+                      title = div(icon("user-check"), span(id = "tab_validacion_lbl", " LLM Validation")),
                       value = "tab_validacion",
                       div(
                         style = "padding: 15px;",
@@ -2291,45 +2321,45 @@ ui <- dashboardPage(
               fluidRow(
                 box(
                   width = 4,
-                  title = "Configuración del Reporte",
+                  title = span(id = "box_config_reporte", "Report Settings"),
                   status = "primary",
                   solidHeader = TRUE,
 
                   div(
                     class = "info-panel",
-                    h5(icon("info-circle"), " Información", style = "color: #2c3e50; margin-bottom: 15px;"),
-                    p("Genera un reporte interpretativo automático basado en los análisis realizados.",
+                    h5(icon("info-circle"), span(id = "h_info_reporte", " Information"), style = "color: #2c3e50; margin-bottom: 15px;"),
+                    p(span(id = "p_info_reporte_desc", "Generates an automatic interpretive report based on the analyses performed."),
                       style = "color: #7f8c8d; margin-bottom: 10px;"),
-                    p("Usa el modelo GPT-4.1 de OpenAI para generar reportes interpretativos.",
+                    p(span(id = "p_info_reporte_modelo", "Uses the GPT-4.1 model from OpenAI to generate interpretive reports."),
                       style = "color: #7f8c8d; font-size: 12px;")
                   ),
 
                   hr(),
 
                   selectInput("idioma_reporte",
-                              div(icon("language"), " Idioma del reporte"),
-                              choices = c("Español" = "es", "English" = "en"),
-                              selected = "es"),
+                              div(icon("language"), span(id = "lbl_idioma_reporte", " Report language")),
+                              choices = c("English" = "en", "Español" = "es"),
+                              selected = "en"),
 
                   selectInput("estilo_reporte",
-                              div(icon("file-alt"), " Estilo de redacción"),
+                              div(icon("file-alt"), span(id = "lbl_estilo", " Writing style")),
                               choices = c(
-                                "Académico (tesis/artículo)" = "academico",
-                                "Técnico (informe)" = "tecnico",
-                                "Divulgativo (general)" = "divulgativo"
+                                "Academic (thesis/article)" = "academico",
+                                "Technical (report)" = "tecnico",
+                                "Popular (general)" = "divulgativo"
                               ),
                               selected = "academico"),
 
                   checkboxGroupInput("secciones_reporte",
-                                     div(icon("list-check"), " Secciones a incluir"),
+                                     div(icon("list-check"), span(id = "lbl_secciones", " Sections to include")),
                                      choices = c(
-                                       "Resumen de codificación" = "codificacion",
-                                       "Análisis de frecuencias" = "frecuencias",
-                                       "Clustering semántico" = "clustering",
-                                       "Coherencia de códigos" = "coherencia",
-                                       "Red semántica" = "red",
-                                       "Hallazgos principales" = "hallazgos",
-                                       "Limitaciones" = "limitaciones"
+                                       "Coding summary" = "codificacion",
+                                       "Frequency analysis" = "frecuencias",
+                                       "Semantic clustering" = "clustering",
+                                       "Code coherence" = "coherencia",
+                                       "Semantic network" = "red",
+                                       "Key findings" = "hallazgos",
+                                       "Limitations" = "limitaciones"
                                      ),
                                      selected = c("codificacion", "frecuencias", "hallazgos")),
 
@@ -2338,31 +2368,31 @@ ui <- dashboardPage(
                   div(
                     class = "info-panel",
                     style = "background: #fff3cd; border-color: #ffc107;",
-                    h5(icon("exclamation-triangle"), " Requisitos", style = "color: #856404; margin-bottom: 10px;"),
+                    h5(icon("exclamation-triangle"), span(id = "h_requisitos_rep", " Requirements"), style = "color: #856404; margin-bottom: 10px;"),
                     tags$ul(
                       style = "color: #856404; font-size: 12px; padding-left: 20px;",
-                      tags$li("Tener fragmentos codificados (manual o IA)"),
-                      tags$li("Para análisis semántico: haber generado embeddings")
+                      tags$li(span(id = "li_req_frag", "Have coded fragments (manual or AI)")),
+                      tags$li(span(id = "li_req_emb", "For semantic analysis: have generated embeddings"))
                     )
                   ),
 
                   hr(),
 
                   actionButton("btn_generar_reporte",
-                               div(icon("magic"), " Generar Reporte"),
+                               div(icon("magic"), span(id = "btn_gen_reporte", " Generate Report")),
                                class = "btn-primary btn-block btn-lg"),
 
                   div(
                     style = "margin-top: 15px;",
                     downloadButton("btn_descargar_reporte",
-                                   div(icon("file-word"), " Descargar (.docx)"),
+                                   div(icon("file-word"), span(id = "btn_desc_docx", " Download (.docx)")),
                                    class = "btn-success btn-block")
                   )
                 ),
 
                 box(
                   width = 8,
-                  title = "Reporte Generado",
+                  title = span(id = "box_reporte_generado", "Generated Report"),
                   status = "primary",
                   solidHeader = TRUE,
 
@@ -2378,35 +2408,35 @@ ui <- dashboardPage(
       tabItem("estado",
               fluidRow(
                 box(
-                  width = 6, 
-                  title = "Guardar Proyecto", 
-                  status = "primary", 
+                  width = 6,
+                  title = span(id = "box_guardar_proyecto", "Save Project"),
+                  status = "primary",
                   solidHeader = TRUE,
                   div(
                     class = "info-panel",
-                    h5(icon("save"), " Respaldo de Datos", style = "color: #2c3e50; margin-bottom: 15px;"),
-                    p("Guarda todo tu trabajo incluyendo códigos, categorías y resaltados.",
+                    h5(icon("save"), span(id = "h_respaldo", " Data Backup"), style = "color: #2c3e50; margin-bottom: 15px;"),
+                    p(span(id = "p_guardar_desc", "Saves all your work including codes, categories and highlights."),
                       style = "color: #7f8c8d; margin-bottom: 20px;"),
                     downloadButton("saveState",
-                                   div(icon("download"), " Descargar Estado (.rds)"),
+                                   div(icon("download"), span(id = "btn_descargar_estado", " Download State (.rds)")),
                                    class = "btn-primary")
                   )
                 ),
                 box(
-                  width = 6, 
-                  title = "Cargar Proyecto", 
-                  status = "primary", 
+                  width = 6,
+                  title = span(id = "box_cargar_proyecto", "Load Project"),
+                  status = "primary",
                   solidHeader = TRUE,
                   div(
                     class = "info-panel",
-                    h5(icon("upload"), " Restaurar Datos", style = "color: #2c3e50; margin-bottom: 15px;"),
-                    p("Carga un proyecto previamente guardado para continuar trabajando.",
+                    h5(icon("upload"), span(id = "h_restaurar", " Restore Data"), style = "color: #2c3e50; margin-bottom: 15px;"),
+                    p(span(id = "p_cargar_desc", "Load a previously saved project to continue working."),
                       style = "color: #7f8c8d; margin-bottom: 20px;"),
-                    fileInput("loadState", 
-                              div(icon("folder-open"), " Seleccionar Archivo"), 
+                    fileInput("loadState",
+                              div(icon("folder-open"), span(id = "lbl_seleccionar_archivo", " Select File")),
                               accept = ".rds",
-                              buttonLabel = "Buscar...",
-                              placeholder = "Archivo .rds no seleccionado")
+                              buttonLabel = "Browse...",
+                              placeholder = ".rds file not selected")
                   )
                 )
               )
@@ -2416,11 +2446,11 @@ ui <- dashboardPage(
       tabItem("citar",
               fluidRow(
                 box(
-                  width = 12, 
-                  title = "Cómo Citar RCualiText", 
-                  status = "primary", 
+                  width = 12,
+                  title = span(id = "box_como_citar", "How to Cite RCualiText"),
+                  status = "primary",
                   solidHeader = TRUE,
-                  
+
                   # Header visual mejorado
                   div(
                     style = "text-align: center; padding: 30px; background: #2c3e50; margin: -25px -25px 25px -25px; color: white;",
@@ -2428,13 +2458,13 @@ ui <- dashboardPage(
                       style = "font-size: 64px; margin-bottom: 15px;",
                       icon("quote-right")
                     ),
-                    h2("Reconocimiento Académico", style = "margin: 0; font-weight: 600;")
+                    h2(span(id = "h_reconocimiento", "Academic Recognition"), style = "margin: 0; font-weight: 600;")
                   ),
-                  
+
                   # Cita principal
                   div(
                     class = "info-panel",
-                    h3(icon("graduation-cap"), " Cita en formato APA 7ª edición", 
+                    h3(icon("graduation-cap"), span(id = "h_cita_apa", " APA 7th Edition Citation"),
                        style = "color: #2c3e50; margin-bottom: 20px; font-weight: 600;"),
                     
                     div(
@@ -2445,40 +2475,40 @@ ui <- dashboardPage(
                     div(
                       style = "text-align: center; margin: 25px 0;",
                       actionButton("copycitation",
-                                   div(icon("copy"), " Copiar Cita"),
+                                   div(icon("copy"), span(id = "btn_copiar_cita", " Copy Citation")),
                                    class = "btn-primary")
                     )
                   ),
-                  
+
                   hr(),
-                  
+
                   # Información adicional mejorada
                   div(
                     style = "display: grid; grid-template-columns: 1fr 1fr; gap: 25px; margin-top: 30px;",
-                    
+
                     # Información del software
                     div(
                       class = "info-panel",
-                      h4(icon("info-circle"), " Información del Software", style = "color: #2c3e50; margin-bottom: 15px;"),
+                      h4(icon("info-circle"), span(id = "h_info_software", " Software Information"), style = "color: #2c3e50; margin-bottom: 15px;"),
                       div(
                         style = "space-y: 10px;",
-                        div(strong("Autor: "), "Dr. José Ventura-León"),
-                        div(strong("Año: "), "2026"),
-                        div(strong("Versión: "), "2.0"),
-                        div(strong("Tipo: "), "Aplicación Shiny para análisis cualitativo"),
-                        div(strong("Repositorio: "), 
-                            tags$a("GitHub", 
-                                   href = "https://github.com/jventural/RCualiText_App", 
-                                   target = "_blank", 
+                        div(strong(span(id = "lbl_autor", "Author: ")), "Dr. José Ventura-León"),
+                        div(strong(span(id = "lbl_anio", "Year: ")), "2026"),
+                        div(strong(span(id = "lbl_version", "Version: ")), "2.0"),
+                        div(strong(span(id = "lbl_tipo", "Type: ")), span(id = "val_tipo", "Shiny app for qualitative analysis")),
+                        div(strong(span(id = "lbl_repositorio", "Repository: ")),
+                            tags$a("GitHub",
+                                   href = "https://github.com/jventural/RCualiText_App",
+                                   target = "_blank",
                                    style = "color: #2c3e50; text-decoration: none; font-weight: 500;"))
                       )
                     ),
-                    
+
                     # Nota importante
                     div(
                       class = "danger-panel",
-                      h4(icon("exclamation-triangle"), " Importante", style = "color: #c0392b; margin-bottom: 15px;"),
-                      p("Si utilizas RCualiText en tu investigación o trabajo académico, te agradecemos que incluyas esta cita para reconocer el trabajo del autor y permitir que otros investigadores puedan acceder a esta herramienta.", 
+                      h4(icon("exclamation-triangle"), span(id = "h_importante", " Important"), style = "color: #c0392b; margin-bottom: 15px;"),
+                      p(span(id = "p_importante_desc", "If you use RCualiText in your research or academic work, we appreciate you including this citation to acknowledge the author's work and allow other researchers to access this tool."),
                         style = "color: #c0392b; margin-bottom: 0; line-height: 1.6;")
                     )
                   )
@@ -2490,11 +2520,11 @@ ui <- dashboardPage(
       tabItem("info",
               fluidRow(
                 box(
-                  width = 12, 
-                  title = "Acerca de RCualiText", 
-                  status = "primary", 
+                  width = 12,
+                  title = span(id = "box_acerca_de", "About RCualiText"),
+                  status = "primary",
                   solidHeader = TRUE,
-                  
+
                   # Header mejorado
                   div(
                     style = "text-align: center; padding: 30px; background: #2c3e50; margin: -25px -25px 25px -25px; color: white;",
@@ -2502,47 +2532,47 @@ ui <- dashboardPage(
                       style = "font-size: 64px; margin-bottom: 15px;",
                       icon("microscope")
                     ),
-                    h2("Análisis Cualitativo Avanzado", style = "margin: 0; font-weight: 600;")
+                    h2(span(id = "h_analisis_avanzado", "Advanced Qualitative Analysis"), style = "margin: 0; font-weight: 600;")
                   ),
-                  
+
                   # Descripción principal
                   div(
                     class = "info-panel",
-                    p("RCualiText es una aplicación avanzada para la codificación cualitativa de textos que permite cargar documentos (.txt y .docx), definir códigos y categorías, resaltar extractos de interés y visualizar frecuencias y redes de coocurrencia de códigos.", 
+                    p(span(id = "p_descripcion_1", "RCualiText is an advanced application for qualitative text coding that allows you to load documents (.txt and .docx), define codes and categories, highlight extracts of interest, and visualize code frequencies and co-occurrence networks."),
                       style = "font-size: 16px; line-height: 1.8; color: #2c3e50;"),
-                    p("Con RCualiText puedes gestionar de manera interactiva tu lista de códigos, agruparlos en categorías, exportar tus resaltados a Excel y analizar gráficamente tus datos cualitativos mediante visualizaciones modernas y análisis de redes.", 
+                    p(span(id = "p_descripcion_2", "With RCualiText you can interactively manage your code list, group them into categories, export your highlights to Excel, and graphically analyze your qualitative data through modern visualizations and network analysis."),
                       style = "font-size: 16px; line-height: 1.8; color: #2c3e50;")
                   ),
-                  
+
                   # Funcionalidades en grid
                   div(
                     style = "display: grid; grid-template-columns: 1fr 1fr; gap: 25px; margin: 30px 0;",
-                    
+
                     # Funcionalidades de Resaltado
                     div(
                       class = "info-panel",
-                      h4(icon("highlighter"), " Resaltado Inteligente", style = "color: #2c3e50; margin-bottom: 15px;"),
+                      h4(icon("highlighter"), span(id = "h_resaltado_inteligente", " Smart Highlighting"), style = "color: #2c3e50; margin-bottom: 15px;"),
                       tags$ul(
                         style = "line-height: 1.8; color: #2c3e50;",
-                        tags$li(strong("Modo Seleccionar:"), " Aplica códigos a fragmentos seleccionados"),
-                        tags$li(strong("Modo Deseleccionar:"), " Elimina códigos específicos con un clic"),
-                        tags$li(strong("Modo Acumulativo:"), " Múltiples códigos por fragmento"),
-                        tags$li(strong("Gradientes Visuales:"), " Códigos múltiples con efectos visuales"),
-                        tags$li(strong("Tooltips:"), " Información al pasar el mouse"),
-                        tags$li(strong("Exportación:"), " Datos detallados a Excel")
+                        tags$li(strong("Select Mode:"), span(id = "li_info_sel", " Apply codes to selected fragments")),
+                        tags$li(strong("Deselect Mode:"), span(id = "li_info_desel", " Remove specific codes with one click")),
+                        tags$li(strong("Accumulative Mode:"), span(id = "li_info_acum", " Multiple codes per fragment")),
+                        tags$li(strong("Visual Gradients:"), span(id = "li_info_grad", " Multiple codes with visual effects")),
+                        tags$li(strong("Tooltips:"), span(id = "li_info_tips", " Information on mouse hover")),
+                        tags$li(strong("Export:"), span(id = "li_info_export", " Detailed data to Excel"))
                       )
                     ),
-                    
+
                     # Guía de uso
                     div(
                       class = "info-panel",
-                      h4(icon("user-graduate"), " Guía de Deselección", style = "color: #2c3e50; margin-bottom: 15px;"),
+                      h4(icon("user-graduate"), span(id = "h_guia_deseleccion", " Deselection Guide"), style = "color: #2c3e50; margin-bottom: 15px;"),
                       tags$ol(
                         style = "line-height: 1.8; color: #2c3e50;",
-                        tags$li("Activa el modo 'Deseleccionar' en el panel de controles"),
-                        tags$li("Haz clic directamente sobre el texto resaltado"),
-                        tags$li("Selecciona qué código específico eliminar"),
-                        tags$li("Vuelve al modo 'Seleccionar' para continuar")
+                        tags$li(span(id = "li_guia_1", "Activate 'Deselect' mode in the control panel")),
+                        tags$li(span(id = "li_guia_2", "Click directly on the highlighted text")),
+                        tags$li(span(id = "li_guia_3", "Select which specific code to remove")),
+                        tags$li(span(id = "li_guia_4", "Return to 'Select' mode to continue"))
                       )
                     )
                   ),
@@ -2564,6 +2594,57 @@ ui <- dashboardPage(
 # SERVER (con downloadHandlers personalizados)
 # ========================================
 server <- function(input, output, session) {
+  # ========================================
+  # i18n - Language system
+  # ========================================
+  current_lang <- reactiveVal("en")
+
+  observeEvent(input$lang_toggle, {
+    current_lang(if (input$lang_toggle) "es" else "en")
+  })
+
+  tr <- function(key, ...) {
+    lang <- current_lang()
+    parts <- strsplit(key, "\\.")[[1]]
+    val <- translations[[lang]]
+    for (p in parts) { val <- val[[p]]; if (is.null(val)) return(key) }
+    replacements <- list(...)
+    for (nm in names(replacements)) {
+      val <- gsub(paste0("\\{", nm, "\\}"), as.character(replacements[[nm]]), val)
+    }
+    val
+  }
+
+  dt_language <- function() {
+    list(
+      search = tr("datatable.search"),
+      lengthMenu = tr("datatable.lengthMenu"),
+      info = tr("datatable.info"),
+      paginate = list(
+        previous = tr("datatable.paginate_previous"),
+        `next` = tr("datatable.paginate_next")
+      )
+    )
+  }
+
+  # Dynamic sidebar
+  output$dynamic_sidebar <- renderMenu({
+    current_lang()
+    sidebarMenu(id = "sidebar",
+      menuItem(tr("sidebar.documento"), tabName = "texto", icon = icon("file-text")),
+      menuItem(tr("sidebar.codigos"), tabName = "codigos", icon = icon("tags")),
+      menuItem(tr("sidebar.categorias"), tabName = "categorias", icon = icon("folder-open")),
+      menuItem(tr("sidebar.extractos"), tabName = "resaltes", icon = icon("highlighter")),
+      menuItem(tr("sidebar.analisis"), tabName = "analisis", icon = icon("chart-bar")),
+      menuItem(tr("sidebar.analisis_ia"), tabName = "analisis_ia", icon = icon("robot")),
+      menuItem(tr("sidebar.analisis_semantico"), tabName = "analisis_semantico", icon = icon("brain")),
+      menuItem(tr("sidebar.reporte_ia"), tabName = "reporte_ia", icon = icon("file-alt")),
+      menuItem(tr("sidebar.proyecto"), tabName = "estado", icon = icon("save")),
+      menuItem(tr("sidebar.citar"), tabName = "citar", icon = icon("quote-right")),
+      menuItem(tr("sidebar.ayuda"), tabName = "info", icon = icon("info-circle"))
+    )
+  })
+
   rv <- reactiveValues(
     codigosDF    = tibble(Codigo = character(), Color = character()),
     categoriasDF = tibble(Categoria = character(), Codigos = character()),
@@ -2603,6 +2684,234 @@ server <- function(input, output, session) {
   get_code_colors <- reactive({
     set_names(rv$codigosDF$Color, rv$codigosDF$Codigo)
   })
+
+  # ========================================
+  # Master language observer - updates all UI text
+  # ========================================
+  observeEvent(current_lang(), {
+    lang <- current_lang()
+    # --- Document tab ---
+    shinyjs::html("box_panel_control", tr("documento.panel_control"))
+    shinyjs::html("lbl_cargar_docs", paste0(" ", tr("documento.cargar_documentos")))
+    shinyjs::html("h_modo_trabajo", paste0(" ", tr("documento.modo_trabajo")))
+    shinyjs::html("btn_mode_select", paste0(" ", tr("documento.seleccionar")))
+    shinyjs::html("btn_mode_deselect", paste0(" ", tr("documento.deseleccionar")))
+    shinyjs::html("lbl_codigo_aplicar", paste0(" ", tr("documento.codigo_aplicar")))
+    shinyjs::html("lbl_modo_acumulativo", paste0(" ", tr("documento.modo_acumulativo")))
+    shinyjs::html("help_modo_acumulativo", tr("documento.modo_acumulativo_help"))
+    shinyjs::html("h_navegacion", paste0(" ", tr("documento.navegacion")))
+    shinyjs::html("btn_anterior", paste0(" ", tr("documento.anterior")))
+    shinyjs::html("btn_siguiente", paste0(" ", tr("documento.siguiente")))
+    shinyjs::html("h_acciones", paste0(" ", tr("documento.acciones")))
+    shinyjs::html("btn_limpiar", paste0(" ", tr("documento.limpiar")))
+    shinyjs::html("btn_ayuda", paste0(" ", tr("documento.ayuda_btn")))
+    shinyjs::html("box_visor_documento", tr("documento.visor_documento"))
+    # --- Codes tab ---
+    shinyjs::html("box_gestion_codigos", tr("codigos.gestion_codigos"))
+    shinyjs::html("lbl_nombre_codigo", paste0(" ", tr("codigos.nombre_codigo")))
+    shinyjs::html("h_color_codigo", paste0(" ", tr("codigos.color_codigo")))
+    shinyjs::html("btn_guardar_codigo", paste0(" ", tr("codigos.guardar")))
+    shinyjs::html("btn_eliminar_codigo", paste0(" ", tr("codigos.eliminar")))
+    shinyjs::html("box_lista_codigos", tr("codigos.lista_codigos"))
+    # --- Categories tab ---
+    shinyjs::html("box_gestion_categorias", tr("categorias.gestion_categorias"))
+    shinyjs::html("lbl_nombre_categoria", paste0(" ", tr("categorias.nombre_categoria")))
+    shinyjs::html("lbl_codigos_asociados", paste0(" ", tr("categorias.codigos_asociados")))
+    shinyjs::html("btn_guardar_cat", paste0(" ", tr("categorias.guardar")))
+    shinyjs::html("btn_eliminar_cat", paste0(" ", tr("categorias.eliminar")))
+    shinyjs::html("box_categorias_definidas", tr("categorias.categorias_definidas"))
+    # --- Extracts tab ---
+    shinyjs::html("box_gestion_extractos", tr("extractos.gestion_extractos"))
+    shinyjs::html("h_herramientas", paste0(" ", tr("extractos.herramientas")))
+    shinyjs::html("btn_exportar_xlsx", paste0(" ", tr("extractos.exportar_xlsx")))
+    shinyjs::html("btn_eliminar_seleccionado", paste0(" ", tr("extractos.eliminar_seleccionado")))
+    shinyjs::html("btn_limpiar_todo", paste0(" ", tr("extractos.limpiar_todo")))
+    shinyjs::html("h_guia_resaltados", paste0(" ", tr("extractos.guia_resaltados")))
+    shinyjs::html("h_visualizacion_ext", paste0(" ", tr("extractos.visualizacion")))
+    shinyjs::html("li_gradientes", tr("extractos.gradientes_multiples"))
+    shinyjs::html("li_hover", tr("extractos.hover_codigos"))
+    shinyjs::html("li_cada_fila", tr("extractos.cada_fila"))
+    shinyjs::html("h_edicion_ext", paste0(" ", tr("extractos.edicion")))
+    shinyjs::html("li_modo_desel", tr("extractos.modo_deseleccionar_eliminar"))
+    shinyjs::html("li_seleccion_mult", tr("extractos.seleccion_multiple"))
+    shinyjs::html("li_exportacion", tr("extractos.exportacion_excel"))
+    # --- Analysis tab ---
+    shinyjs::html("box_configuracion_analisis", tr("analisis.configuracion"))
+    shinyjs::html("h_opciones_visuales", paste0(" ", tr("analisis.opciones_visuales")))
+    shinyjs::html("lbl_colorear_categoria", tr("analisis.colorear_categoria"))
+    shinyjs::html("h_config_descarga", paste0(" ", tr("analisis.config_descarga")))
+    shinyjs::html("lbl_ancho", paste0(" ", tr("analisis.ancho_pulg")))
+    shinyjs::html("lbl_alto", paste0(" ", tr("analisis.alto_pulg")))
+    shinyjs::html("lbl_dpi", paste0(" ", tr("analisis.resolucion_dpi")))
+    shinyjs::html("help_config_aplicada", tr("analisis.config_aplicada"))
+    shinyjs::html("box_distribucion_codigos", tr("analisis.distribucion_codigos"))
+    shinyjs::html("box_exportar_analisis", tr("analisis.exportar"))
+    shinyjs::html("btn_dist_jpg", paste0(" ", tr("analisis.distribucion_jpg")))
+    shinyjs::html("box_exportar_red", tr("analisis.exportar_red"))
+    shinyjs::html("btn_red_jpg", paste0(" ", tr("analisis.red_coocurrencia_jpg")))
+    shinyjs::html("box_red_coocurrencia", tr("analisis.red_coocurrencia_centralidad"))
+    # --- AI Analysis tab ---
+    shinyjs::html("box_config_ia", tr("analisis_ia.config_analisis_ia"))
+    shinyjs::html("h_config_openai", paste0(" ", tr("analisis_ia.config_openai")))
+    shinyjs::html("lbl_api_key", paste0(" ", tr("analisis_ia.api_key_openai")))
+    shinyjs::html("help_api_key", tr("analisis_ia.api_key_help"))
+    shinyjs::html("info_api_key_req", paste0(" ", tr("analisis_ia.api_key_requerida")))
+    shinyjs::html("h_diccionario", paste0(" ", tr("analisis_ia.diccionario_codigos")))
+    shinyjs::html("lbl_cargar_dict", paste0(" ", tr("analisis_ia.cargar_diccionario")))
+    shinyjs::html("help_columnas_req", tr("analisis_ia.columnas_requeridas"))
+    shinyjs::html("btn_ejecutar_ia", paste0(" ", tr("analisis_ia.ejecutar_analisis")))
+    shinyjs::html("btn_descargar_resultados", paste0(" ", tr("analisis_ia.descargar_resultados")))
+    shinyjs::html("help_resultados", tr("analisis_ia.resultados_help"))
+    shinyjs::html("box_resultados_ia", tr("analisis_ia.resultados_analisis_ia"))
+    shinyjs::html("h_instrucciones_ia", paste0(" ", tr("analisis_ia.instrucciones")))
+    shinyjs::html("p_instruccion_1", tr("analisis_ia.instruccion_1"))
+    shinyjs::html("p_instruccion_2", tr("analisis_ia.instruccion_2"))
+    shinyjs::html("p_instruccion_3", tr("analisis_ia.instruccion_3"))
+    shinyjs::html("p_instruccion_4", tr("analisis_ia.instruccion_4"))
+    shinyjs::html("p_instruccion_5", tr("analisis_ia.instruccion_5"))
+    shinyjs::html("btn_descargar_tabla_excel", paste0(" ", tr("analisis_ia.descargar_tabla_excel")))
+    shinyjs::html("box_visualizacion_ia", tr("analisis_ia.visualizacion_resultados"))
+    shinyjs::html("h_dist_codigos_ia", paste0(" ", tr("analisis_ia.distribucion_codigos_ia")))
+    shinyjs::html("h_frag_categoria_ia", paste0(" ", tr("analisis_ia.fragmentos_categoria")))
+    # --- Semantic Analysis tab ---
+    shinyjs::html("box_config_semantico", tr("analisis_semantico.config_analisis_semantico"))
+    shinyjs::html("h_config_sem", paste0(" ", tr("analisis_semantico.configuracion")))
+    shinyjs::html("p_modulo_info", tr("analisis_semantico.modulo_info"))
+    shinyjs::html("info_modelo_emb", paste0(" ", tr("analisis_semantico.modelo_embeddings")))
+    shinyjs::html("info_api_key_sem", paste0(" ", tr("analisis_semantico.api_key_info")))
+    shinyjs::html("btn_gen_emb", paste0(" ", tr("analisis_semantico.generar_embeddings")))
+    shinyjs::html("help_gen_emb", tr("analisis_semantico.generar_embeddings_help"))
+    shinyjs::html("box_herramientas_sem", tr("analisis_semantico.herramientas_analisis"))
+    shinyjs::html("h_requisitos_sem", paste0(" ", tr("analisis_semantico.requisitos")))
+    shinyjs::html("p_req_1", tr("analisis_semantico.req_1"))
+    shinyjs::html("p_req_2", tr("analisis_semantico.req_2"))
+    shinyjs::html("p_req_3", tr("analisis_semantico.req_3"))
+    shinyjs::html("h_clustering", paste0(" ", tr("analisis_semantico.clustering_semantico")))
+    shinyjs::html("p_clustering_desc", tr("analisis_semantico.clustering_desc"))
+    shinyjs::html("lbl_num_clusters", tr("analisis_semantico.num_clusters"))
+    shinyjs::html("btn_ejecutar_clustering", paste0(" ", tr("analisis_semantico.ejecutar_clustering")))
+    shinyjs::html("h_similitud", paste0(" ", tr("analisis_semantico.deteccion_similitud")))
+    shinyjs::html("p_similitud_desc", tr("analisis_semantico.similitud_desc"))
+    shinyjs::html("lbl_umbral_sim", tr("analisis_semantico.umbral_similitud"))
+    shinyjs::html("btn_detectar_sim", paste0(" ", tr("analisis_semantico.detectar_similares")))
+    shinyjs::html("h_vis_2d", paste0(" ", tr("analisis_semantico.visualizacion_2d")))
+    shinyjs::html("p_vis_desc", tr("analisis_semantico.visualizacion_desc"))
+    shinyjs::html("lbl_metodo_red", tr("analisis_semantico.metodo_reduccion"))
+    shinyjs::html("btn_visualizar_lbl", paste0(" ", tr("analisis_semantico.visualizar")))
+    shinyjs::html("h_coherencia", paste0(" ", tr("analisis_semantico.analisis_coherencia")))
+    shinyjs::html("p_coherencia_desc", tr("analisis_semantico.coherencia_desc"))
+    shinyjs::html("btn_analizar_coh", paste0(" ", tr("analisis_semantico.analizar_coherencia")))
+    shinyjs::html("h_validacion_llm", paste0(" ", tr("analisis_semantico.validacion_llm")))
+    shinyjs::html("p_validacion_desc", tr("analisis_semantico.validacion_desc"))
+    shinyjs::html("lbl_frag_validar", tr("analisis_semantico.fragmentos_validar"))
+    shinyjs::html("btn_validar", paste0(" ", tr("analisis_semantico.validar")))
+    shinyjs::html("box_config_descarga_fig", paste0(" ", tr("analisis_semantico.config_descarga_figuras")))
+    shinyjs::html("help_ajusta_dim", paste0(" ", tr("analisis_semantico.ajusta_dimensiones")))
+    shinyjs::html("box_resultados_sem", tr("analisis_semantico.resultados_analisis_semantico"))
+    shinyjs::html("tab_clustering_lbl", paste0(" ", tr("analisis_semantico.tab_clustering")))
+    shinyjs::html("tab_similitud_lbl", paste0(" ", tr("analisis_semantico.tab_similitud")))
+    shinyjs::html("tab_vis_lbl", paste0(" ", tr("analisis_semantico.tab_visualizacion")))
+    shinyjs::html("tab_coherencia_lbl", paste0(" ", tr("analisis_semantico.tab_coherencia")))
+    shinyjs::html("tab_red_sem_lbl", paste0(" ", tr("analisis_semantico.tab_red_semantica")))
+    shinyjs::html("tab_validacion_lbl", paste0(" ", tr("analisis_semantico.tab_validacion")))
+    shinyjs::html("h_config_red", paste0(" ", tr("analisis_semantico.config_red")))
+    shinyjs::html("lbl_umbral_conexion", tr("analisis_semantico.umbral_conexion"))
+    shinyjs::html("help_umbral_conexion", tr("analisis_semantico.umbral_conexion_help"))
+    shinyjs::html("lbl_colorear_por", tr("analisis_semantico.colorear_por"))
+    shinyjs::html("btn_gen_red", paste0(" ", tr("analisis_semantico.generar_red")))
+    shinyjs::html("btn_descargar_png", paste0(" ", tr("analisis_semantico.descargar_png")))
+    # --- Report tab ---
+    shinyjs::html("box_config_reporte", tr("reporte.config_reporte"))
+    shinyjs::html("h_info_reporte", paste0(" ", tr("reporte.informacion")))
+    shinyjs::html("p_info_reporte_desc", tr("reporte.info_desc"))
+    shinyjs::html("p_info_reporte_modelo", tr("reporte.info_modelo"))
+    shinyjs::html("lbl_idioma_reporte", paste0(" ", tr("reporte.idioma_reporte")))
+    shinyjs::html("lbl_estilo", paste0(" ", tr("reporte.estilo_redaccion")))
+    shinyjs::html("lbl_secciones", paste0(" ", tr("reporte.secciones_incluir")))
+    shinyjs::html("h_requisitos_rep", paste0(" ", tr("reporte.requisitos")))
+    shinyjs::html("li_req_frag", tr("reporte.req_fragmentos"))
+    shinyjs::html("li_req_emb", tr("reporte.req_embeddings"))
+    shinyjs::html("btn_gen_reporte", paste0(" ", tr("reporte.generar_reporte")))
+    shinyjs::html("btn_desc_docx", paste0(" ", tr("reporte.descargar_docx")))
+    shinyjs::html("box_reporte_generado", tr("reporte.reporte_generado"))
+    # --- Project tab ---
+    shinyjs::html("box_guardar_proyecto", tr("proyecto.guardar_proyecto"))
+    shinyjs::html("h_respaldo", paste0(" ", tr("proyecto.respaldo_datos")))
+    shinyjs::html("p_guardar_desc", tr("proyecto.guardar_desc"))
+    shinyjs::html("btn_descargar_estado", paste0(" ", tr("proyecto.descargar_estado")))
+    shinyjs::html("box_cargar_proyecto", tr("proyecto.cargar_proyecto"))
+    shinyjs::html("h_restaurar", paste0(" ", tr("proyecto.restaurar_datos")))
+    shinyjs::html("p_cargar_desc", tr("proyecto.cargar_desc"))
+    shinyjs::html("lbl_seleccionar_archivo", paste0(" ", tr("proyecto.seleccionar_archivo")))
+    # --- Cite tab ---
+    shinyjs::html("box_como_citar", tr("citar.como_citar"))
+    shinyjs::html("h_reconocimiento", tr("citar.reconocimiento"))
+    shinyjs::html("h_cita_apa", paste0(" ", tr("citar.cita_apa")))
+    shinyjs::html("btn_copiar_cita", paste0(" ", tr("citar.copiar_cita")))
+    shinyjs::html("h_info_software", paste0(" ", tr("citar.info_software")))
+    shinyjs::html("lbl_autor", tr("citar.autor"))
+    shinyjs::html("lbl_anio", tr("citar.anio"))
+    shinyjs::html("lbl_version", tr("citar.version"))
+    shinyjs::html("lbl_tipo", tr("citar.tipo"))
+    shinyjs::html("val_tipo", tr("citar.tipo_valor"))
+    shinyjs::html("lbl_repositorio", tr("citar.repositorio"))
+    shinyjs::html("h_importante", paste0(" ", tr("citar.importante")))
+    shinyjs::html("p_importante_desc", tr("citar.importante_desc"))
+    # --- Help tab ---
+    shinyjs::html("box_acerca_de", tr("info.acerca_de"))
+    shinyjs::html("h_analisis_avanzado", tr("info.analisis_avanzado"))
+    shinyjs::html("p_descripcion_1", tr("info.descripcion_1"))
+    shinyjs::html("p_descripcion_2", tr("info.descripcion_2"))
+    shinyjs::html("h_resaltado_inteligente", paste0(" ", tr("info.resaltado_inteligente")))
+    shinyjs::html("li_info_sel", paste0(" ", tr("info.modo_seleccionar_desc")))
+    shinyjs::html("li_info_desel", paste0(" ", tr("info.modo_deseleccionar_desc")))
+    shinyjs::html("li_info_acum", paste0(" ", tr("info.modo_acumulativo_desc")))
+    shinyjs::html("li_info_grad", paste0(" ", tr("info.gradientes_desc")))
+    shinyjs::html("li_info_tips", paste0(" ", tr("info.tooltips_desc")))
+    shinyjs::html("li_info_export", paste0(" ", tr("info.exportacion_desc")))
+    shinyjs::html("h_guia_deseleccion", paste0(" ", tr("info.guia_deseleccion")))
+    shinyjs::html("li_guia_1", tr("info.guia_paso_1"))
+    shinyjs::html("li_guia_2", tr("info.guia_paso_2"))
+    shinyjs::html("li_guia_3", tr("info.guia_paso_3"))
+    shinyjs::html("li_guia_4", tr("info.guia_paso_4"))
+
+    # --- Update select inputs with translated choices ---
+    updateSelectInput(session, "estilo_reporte",
+      choices = stats::setNames(
+        c("academico", "tecnico", "divulgativo"),
+        c(tr("reporte.academico"), tr("reporte.tecnico"), tr("reporte.divulgativo"))
+      ),
+      selected = input$estilo_reporte)
+    updateCheckboxGroupInput(session, "secciones_reporte",
+      choices = stats::setNames(
+        c("codificacion", "frecuencias", "clustering", "coherencia", "red", "hallazgos", "limitaciones"),
+        c(tr("reporte.sec_codificacion"), tr("reporte.sec_frecuencias"), tr("reporte.sec_clustering"),
+          tr("reporte.sec_coherencia"), tr("reporte.sec_red"), tr("reporte.sec_hallazgos"), tr("reporte.sec_limitaciones"))
+      ),
+      selected = input$secciones_reporte)
+    updateSelectInput(session, "color_red_semantica",
+      choices = stats::setNames(
+        c("categoria", "comunidad"),
+        c(tr("analisis_semantico.categoria_opt"), tr("analisis_semantico.comunidad_opt"))
+      ),
+      selected = input$color_red_semantica)
+  })
+
+  # Sync idioma_reporte with global toggle (user can override manually)
+  idioma_reporte_synced <- reactiveVal(TRUE)
+
+  observeEvent(input$idioma_reporte, {
+    if (!identical(input$idioma_reporte, current_lang())) {
+      idioma_reporte_synced(FALSE)
+    }
+  }, ignoreInit = TRUE)
+
+  observeEvent(current_lang(), {
+    if (idioma_reporte_synced()) {
+      updateSelectInput(session, "idioma_reporte", selected = current_lang())
+    }
+    idioma_reporte_synced(TRUE)
+  }, priority = -1)
 
   # ========================================
   # Datos para Análisis Semántico (prioriza IA sobre manual)
@@ -2673,18 +2982,21 @@ server <- function(input, output, session) {
         # Usar plot_codigos_ggplot para exportación estática
         p <- plot_codigos_ggplot(rv$tabla,
                                   fill = input$fillToggle,
-                                  code_colors = code_colors)
+                                  code_colors = code_colors,
+                                  labels = list(freq = tr("plots.frecuencia"), codes = tr("plots.codigos_x"),
+                                                cat = tr("plots.categoria_fill"), code = tr("plots.codigo_label"),
+                                                sin_cat = tr("plots.sin_categoria")))
 
         # Guardar como JPG con parámetros personalizados
         ggsave(file, plot = p, device = "jpeg",
                width = ancho, height = alto, dpi = dpi, bg = "white")
 
         showNotification(
-          paste0("Gráfico de distribución descargado (", ancho, "×", alto, " pulg, ", dpi, " DPI)"),
+          tr("notifications.grafico_distribucion_descargado", w = ancho, h = alto, dpi = dpi),
           type = "message", duration = 4
         )
       } else {
-        showNotification("No hay datos para descargar", type = "error", duration = 3)
+        showNotification(tr("notifications.no_datos_descargar"), type = "error", duration = 3)
       }
     }
   )
@@ -2713,11 +3025,11 @@ server <- function(input, output, session) {
                width = ancho, height = alto, dpi = dpi, bg = "white")
         
         showNotification(
-          paste0("Gráfico de red descargado (", ancho, "×", alto, " pulg, ", dpi, " DPI)"), 
+          tr("notifications.grafico_red_descargado", w = ancho, h = alto, dpi = dpi),
           type = "message", duration = 4
         )
       } else {
-        showNotification("No hay datos para descargar", type = "error", duration = 3)
+        showNotification(tr("notifications.no_datos_descargar"), type = "error", duration = 3)
       }
     }
   )
@@ -2742,32 +3054,32 @@ server <- function(input, output, session) {
     output$currentModeInfo <- renderUI({
       div(
         class = "info-panel",
-        h5(icon("mouse-pointer"), " Modo Seleccionar Activo", style = "color: #2c3e50; margin-bottom: 15px;"),
+        h5(icon("mouse-pointer"), paste0(" ", tr("modes.seleccionar_activo")), style = "color: #2c3e50; margin-bottom: 15px;"),
         div(
           style = "display: grid; grid-template-columns: 1fr 1fr; gap: 15px;",
           div(
-            h6("Acciones disponibles:", style = "color: #2c3e50; margin-bottom: 8px;"),
+            h6(tr("modes.acciones_disponibles"), style = "color: #2c3e50; margin-bottom: 8px;"),
             tags$ul(
               style = "font-size: 13px; color: #7f8c8d; margin: 0;",
-              tags$li("Selecciona texto en el visor de documento"),
-              tags$li("Aplica códigos automáticamente")
+              tags$li(tr("modes.selecciona_texto")),
+              tags$li(tr("modes.aplica_codigos"))
             )
           ),
           div(
-            h6("Características:", style = "color: #2c3e50; margin-bottom: 8px;"),
+            h6(tr("modes.caracteristicas"), style = "color: #2c3e50; margin-bottom: 8px;"),
             tags$ul(
               style = "font-size: 13px; color: #7f8c8d; margin: 0;",
-              tags$li("Modo acumulativo disponible"),
-              tags$li("Clic en resaltado = info")
+              tags$li(tr("modes.acumulativo_disponible")),
+              tags$li(tr("modes.clic_info"))
             )
           )
         )
       )
     })
-    
-    showNotification("Modo Seleccionar activado", type = "message", duration = 2)
+
+    showNotification(tr("notifications.modo_seleccionar"), type = "message", duration = 2)
   })
-  
+
   observeEvent(input$modeDeselect, {
     rv$deselectMode <- TRUE
     
@@ -2782,30 +3094,30 @@ server <- function(input, output, session) {
     output$currentModeInfo <- renderUI({
       div(
         class = "danger-panel",
-        h5(icon("eraser"), " Modo Deseleccionar Activo", style = "color: #c0392b; margin-bottom: 15px;"),
+        h5(icon("eraser"), paste0(" ", tr("modes.deseleccionar_activo")), style = "color: #c0392b; margin-bottom: 15px;"),
         div(
           style = "display: grid; grid-template-columns: 1fr 1fr; gap: 15px;",
           div(
-            h6("Instrucciones:", style = "color: #c0392b; margin-bottom: 8px;"),
+            h6(tr("modes.instrucciones_deseleccion"), style = "color: #c0392b; margin-bottom: 8px;"),
             tags$ul(
               style = "font-size: 13px; color: #a93226; margin: 0;",
-              tags$li("Clic directo en texto resaltado"),
-              tags$li("Elige código específico a eliminar")
+              tags$li(tr("modes.clic_resaltado")),
+              tags$li(tr("modes.elige_codigo"))
             )
           ),
           div(
-            h6("Importante:", style = "color: #c0392b; margin-bottom: 8px;"),
+            h6(tr("modes.importante"), style = "color: #c0392b; margin-bottom: 8px;"),
             tags$ul(
               style = "font-size: 13px; color: #a93226; margin: 0;",
-              tags$li("Cursor cambia en resaltado"),
-              tags$li("Vuelve a 'Seleccionar' después")
+              tags$li(tr("modes.cursor_cambia")),
+              tags$li(tr("modes.vuelve_seleccionar"))
             )
           )
         )
       )
     })
     
-    showNotification("Modo Deseleccionar activado - Haz clic en texto resaltado del visor", 
+    showNotification(tr("notifications.modo_deseleccionar"),
                      type = "warning", duration = 4)
   })
   
@@ -2825,7 +3137,7 @@ server <- function(input, output, session) {
       filter(FragmentId == fragment_id)
     
     if (nrow(fragmentos_asociados) == 0) {
-      showNotification("No se encontraron códigos para este fragmento", type = "error", duration = 3)
+      showNotification(tr("notifications.no_codigos_fragmento"), type = "error", duration = 3)
       return()
     }
     
@@ -2834,19 +3146,19 @@ server <- function(input, output, session) {
       codigo_eliminar <- fragmentos_asociados$Codigo[1]
       
       showModal(modalDialog(
-        title = div(icon("exclamation-triangle"), " Confirmar Eliminación"),
+        title = div(icon("exclamation-triangle"), paste0(" ", tr("modals.confirmar_eliminacion"))),
         div(
-          h4("¿Eliminar este resaltado?", style = "color: #c0392b;"),
+          h4(tr("modals.eliminar_resaltado"), style = "color: #c0392b;"),
           div(
             class = "info-panel",
-            strong("Texto: "), str_trunc(fragment_text, 50), br(),
-            strong("Código: "), span(codigo_eliminar, style = paste0("background:", fragmentos_asociados$Color[1], "; padding: 4px 8px; border-radius: 4px; color: white;")), br(),
-            strong("Archivo: "), fragmentos_asociados$Archivo[1]
+            strong(tr("modals.texto")), str_trunc(fragment_text, 50), br(),
+            strong(tr("modals.codigo_label")), span(codigo_eliminar, style = paste0("background:", fragmentos_asociados$Color[1], "; padding: 4px 8px; border-radius: 4px; color: white;")), br(),
+            strong(tr("modals.archivo_label")), fragmentos_asociados$Archivo[1]
           )
         ),
         footer = tagList(
-          modalButton("Cancelar"),
-          actionButton("confirmarEliminacionUnica", "Eliminar", class = "btn-default")
+          modalButton(tr("modals.cancelar")),
+          actionButton("confirmarEliminacionUnica", tr("modals.eliminar"), class = "btn-default")
         )
       ))
       
@@ -2856,19 +3168,19 @@ server <- function(input, output, session) {
     } else {
       # Múltiples códigos - mostrar opciones
       showModal(modalDialog(
-        title = div(icon("list"), " Seleccionar Código a Eliminar"),
+        title = div(icon("list"), paste0(" ", tr("modals.seleccionar_codigo_eliminar"))),
         div(
-          h4("Este fragmento tiene múltiples códigos:", style = "color: #2c3e50;"),
+          h4(tr("modals.multiples_codigos"), style = "color: #2c3e50;"),
           div(
             class = "info-panel",
-            strong("Texto: "), str_trunc(fragment_text, 50)
+            strong(tr("modals.texto")), str_trunc(fragment_text, 50)
           ),
-          h5("Códigos aplicados:"),
+          h5(tr("modals.codigos_aplicados")),
           DTOutput("tablaCodigosFragmento")
         ),
         footer = tagList(
-          modalButton("Cancelar"),
-          actionButton("eliminarCodigoSeleccionado", "Eliminar Seleccionado", class = "btn-default")
+          modalButton(tr("modals.cancelar")),
+          actionButton("eliminarCodigoSeleccionado", tr("modals.eliminar_seleccionado"), class = "btn-default")
         ),
         size = "m"
       ))
@@ -2890,7 +3202,7 @@ server <- function(input, output, session) {
             lengthChange = FALSE,
             dom = 't'
           ),
-          colnames = c("Código", "Categoría", "Aplicado")
+          colnames = c(tr("colnames.codigo"), tr("colnames.categoria"), tr("colnames.aplicado"))
         ) %>%
           formatStyle(
             "Codigo",
@@ -2920,9 +3232,9 @@ server <- function(input, output, session) {
                  Timestamp == frag$Timestamp))
     
     removeModal()
-    showNotification(paste("Código", frag$Codigo, "eliminado del fragmento"), 
+    showNotification(tr("notifications.codigo_eliminado_fragmento", code = frag$Codigo),
                      type = "message", duration = 3)
-    
+
     # Limpiar variable temporal
     rv$fragmento_a_eliminar <- NULL
   })
@@ -2942,9 +3254,9 @@ server <- function(input, output, session) {
                  Timestamp == frag_eliminar$Timestamp))
     
     removeModal()
-    showNotification(paste("Código", frag_eliminar$Codigo, "eliminado del fragmento"), 
+    showNotification(tr("notifications.codigo_eliminado_fragmento", code = frag_eliminar$Codigo),
                      type = "message", duration = 3)
-    
+
     # Limpiar variables temporales
     rv$fragmentos_multiples <- NULL
   })
@@ -2954,20 +3266,21 @@ server <- function(input, output, session) {
   # ========================================
   
   output$tablaCodigos <- renderDT({
+    current_lang()
     datatable(
-      rv$codigosDF, 
-      selection = "single", 
+      rv$codigosDF,
+      selection = "single",
       options = list(
         pageLength = 8,
         dom = 'frtip',
         language = list(
-          search = "Buscar:",
-          lengthMenu = "Mostrar _MENU_ códigos",
-          info = "Mostrando _START_ a _END_ de _TOTAL_ códigos",
-          paginate = list(previous = "Anterior", `next` = "Siguiente")
+          search = tr("datatable.search"),
+          lengthMenu = tr("datatable.lengthMenu_codigos"),
+          info = tr("datatable.info_codigos"),
+          paginate = list(previous = tr("datatable.paginate_previous"), `next` = tr("datatable.paginate_next"))
         )
       ),
-      colnames = c("Código", "Color")
+      colnames = c(tr("colnames.codigo"), tr("colnames.color"))
     ) %>%
       formatStyle(
         "Color",
@@ -2988,10 +3301,10 @@ server <- function(input, output, session) {
     df <- rv$codigosDF
     if (input$new_codigo %in% df$Codigo) {
       df <- df %>% mutate(Color = if_else(Codigo==input$new_codigo, input$new_color, Color))
-      showNotification(paste("Código", input$new_codigo, "actualizado"), type = "message", duration = 2)
+      showNotification(tr("notifications.codigo_actualizado", code = input$new_codigo), type = "message", duration = 2)
     } else {
       df <- bind_rows(df, tibble(Codigo=input$new_codigo, Color=input$new_color))
-      showNotification(paste("Código", input$new_codigo, "añadido"), type = "message", duration = 2)
+      showNotification(tr("notifications.codigo_anadido", code = input$new_codigo), type = "message", duration = 2)
     }
     rv$codigosDF <- df
     updateSelectInput(session, "codigoTexto", choices = df$Codigo)
@@ -3006,25 +3319,25 @@ server <- function(input, output, session) {
     resaltados_afectados <- rv$tabla %>% filter(Codigo == codigo_eliminar) %>% nrow()
     
     showModal(modalDialog(
-      title = div(icon("exclamation-triangle"), " Confirmar Eliminación de Código"),
+      title = div(icon("exclamation-triangle"), paste0(" ", tr("modals.confirmar_eliminacion_codigo"))),
       div(
-        h4(paste("¿Eliminar el código:", codigo_eliminar, "?"), style = "color: #c0392b;"),
+        h4(tr("modals.eliminar_codigo_pregunta", code = codigo_eliminar), style = "color: #c0392b;"),
         if(resaltados_afectados > 0) {
           div(
             class = "danger-panel",
-            p(paste("Esto también eliminará", resaltados_afectados, "resaltado(s) asociado(s) a este código."),
+            p(tr("notifications.eliminar_resaltados_asociados", n = resaltados_afectados),
               style = "color: #c0392b; font-weight: bold;")
           )
         } else {
           div(
             class = "info-panel",
-            p("Este código no tiene resaltados asociados.", style = "color: #7f8c8d;")
+            p(tr("notifications.este_codigo_no_resaltados"), style = "color: #7f8c8d;")
           )
         }
       ),
       footer = tagList(
-        modalButton("Cancelar"),
-        actionButton("confirmarEliminarCodigo", "Eliminar", class = "btn-default")
+        modalButton(tr("modals.cancelar")),
+        actionButton("confirmarEliminarCodigo", tr("modals.eliminar"), class = "btn-default")
       )
     ))
     
@@ -3058,14 +3371,14 @@ server <- function(input, output, session) {
     
     if(resaltados_eliminados > 0) {
       showNotification(
-        paste("Código", codigo_eliminar, "eliminado junto con", resaltados_eliminados, "resaltado(s)"), 
-        type = "warning", 
+        tr("notifications.codigo_eliminado_con_resaltados", code = codigo_eliminar, n = resaltados_eliminados),
+        type = "warning",
         duration = 4
       )
     } else {
       showNotification(
-        paste("Código", codigo_eliminar, "eliminado"), 
-        type = "warning", 
+        tr("notifications.codigo_eliminado", code = codigo_eliminar),
+        type = "warning",
         duration = 2
       )
     }
@@ -3076,20 +3389,21 @@ server <- function(input, output, session) {
   # ========================================
   
   output$tablaCategorias <- renderDT({
+    current_lang()
     datatable(
-      rv$categoriasDF, 
-      selection = "single", 
+      rv$categoriasDF,
+      selection = "single",
       options = list(
         pageLength = 8,
         dom = 'frtip',
         language = list(
-          search = "Buscar:",
-          lengthMenu = "Mostrar _MENU_ categorías",
-          info = "Mostrando _START_ a _END_ de _TOTAL_ categorías",
-          paginate = list(previous = "Anterior", `next` = "Siguiente")
+          search = tr("datatable.search"),
+          lengthMenu = tr("datatable.lengthMenu_categorias"),
+          info = tr("datatable.info_categorias"),
+          paginate = list(previous = tr("datatable.paginate_previous"), `next` = tr("datatable.paginate_next"))
         )
       ),
-      colnames = c("Categoría", "Códigos Asociados")
+      colnames = c(tr("colnames.categoria"), tr("colnames.codigos_asociados"))
     )
   })
   
@@ -3106,10 +3420,10 @@ server <- function(input, output, session) {
     nueva <- tibble(Categoria=input$new_categoria, Codigos=paste(input$codigos_for_categoria, collapse=", "))
     if (input$new_categoria %in% df$Categoria) {
       df <- df %>% filter(Categoria!=input$new_categoria) %>% bind_rows(nueva)
-      showNotification(paste("Categoría", input$new_categoria, "actualizada"), type = "message", duration = 2)
+      showNotification(tr("notifications.categoria_actualizada", cat = input$new_categoria), type = "message", duration = 2)
     } else {
       df <- bind_rows(df, nueva)
-      showNotification(paste("Categoría", input$new_categoria, "añadida"), type = "message", duration = 2)
+      showNotification(tr("notifications.categoria_anadida", cat = input$new_categoria), type = "message", duration = 2)
     }
     rv$categoriasDF <- df
   })
@@ -3119,7 +3433,7 @@ server <- function(input, output, session) {
     categoria_eliminar <- rv$categoriasDF$Categoria[sel]
     df <- rv$categoriasDF[-sel, ]
     rv$categoriasDF <- df
-    showNotification(paste("Categoría", categoria_eliminar, "eliminada"), type = "warning", duration = 2)
+    showNotification(tr("notifications.categoria_eliminada", cat = categoria_eliminar), type = "warning", duration = 2)
   })
   
   # ========================================
@@ -3134,7 +3448,7 @@ server <- function(input, output, session) {
     })
     rv$docs  <- docs; rv$idx <- 1
     actualizar_texto_mostrado()
-    showNotification(paste(nrow(files), "documento(s) cargado(s)"), type = "message", duration = 3)
+    showNotification(tr("notifications.documentos_cargados", n = nrow(files)), type = "message", duration = 3)
   })
   
   observeEvent(input$prev_doc, {
@@ -3166,7 +3480,7 @@ server <- function(input, output, session) {
     
     # Aplicar resaltados múltiples
     if (nrow(fragmentos_archivo) > 0) {
-      rv$texto <- aplicar_resaltado_multiple(texto_original, fragmentos_archivo)
+      rv$texto <- aplicar_resaltado_multiple(texto_original, fragmentos_archivo, codes_label = tr("colnames.codigo"))
     } else {
       rv$texto <- texto_original
     }
@@ -3181,9 +3495,10 @@ server <- function(input, output, session) {
   })
   
   output$doc_info <- renderText({
+    current_lang()
     if (!is.null(rv$docs) && rv$idx>0) {
-      paste0("Documento ", rv$idx, " de ", length(rv$docs), ": ", rv$docs[[rv$idx]]$name)
-    } else "No hay documentos cargados"
+      tr("notifications.doc_info", idx = rv$idx, total = length(rv$docs), name = rv$docs[[rv$idx]]$name)
+    } else tr("notifications.no_hay_documentos")
   })
   
   # ========================================
@@ -3207,9 +3522,9 @@ server <- function(input, output, session) {
       pull(Categoria) %>% 
       first()
     
-    # Si no hay categoría asignada, usar "Sin categoría"
+    # Si no hay categoría asignada, usar tr("categorias.sin_categoria")
     if (is.null(cat_sel) || is.na(cat_sel) || cat_sel == "") {
-      cat_sel <- "Sin categoría"
+      cat_sel <- tr("categorias.sin_categoria")
     }
     
     # Verificar si el fragmento ya existe
@@ -3235,13 +3550,13 @@ server <- function(input, output, session) {
         rv$tabla <- bind_rows(rv$tabla, newrow)
         
         showNotification(
-          paste("Código", code, "añadido al fragmento"),
+          tr("notifications.codigo_anadido_fragmento", code = code),
           type = "message",
           duration = 3
         )
       } else {
         showNotification(
-          paste("El código", code, "ya está aplicado"),
+          tr("notifications.codigo_ya_aplicado", code = code),
           type = "warning",
           duration = 3
         )
@@ -3270,13 +3585,13 @@ server <- function(input, output, session) {
       
       if (!input$modoAcumulativo && nrow(fragmento_existente) > 0) {
         showNotification(
-          paste("Fragmento recodificado con", code),
+          tr("notifications.fragmento_recodificado", code = code),
           type = "message",
           duration = 3
         )
       } else {
         showNotification(
-          paste("Fragmento codificado con", code),
+          tr("notifications.fragmento_codificado", code = code),
           type = "message",
           duration = 3
         )
@@ -3308,18 +3623,18 @@ server <- function(input, output, session) {
     archivo_actual <- rv$docs[[rv$idx]]$name
     
     showModal(modalDialog(
-      title = div(icon("exclamation-triangle"), " Confirmar Limpieza"),
+      title = div(icon("exclamation-triangle"), paste0(" ", tr("modals.confirmar_limpieza"))),
       div(
-        h4("¿Estás seguro?", style = "color: #2c3e50;"),
+        h4(tr("modals.estas_seguro"), style = "color: #2c3e50;"),
         div(
           class = "info-panel",
-          p(paste("Se eliminarán todos los resaltados del documento:", strong(archivo_actual)),
+          p(tr("modals.eliminar_resaltados_doc", file = archivo_actual),
             style = "color: #e67e22; margin: 0;")
         )
       ),
       footer = tagList(
-        modalButton("Cancelar"),
-        actionButton("confirmarLimpieza", "Sí, limpiar", class = "btn-default")
+        modalButton(tr("modals.cancelar")),
+        actionButton("confirmarLimpieza", tr("modals.si_limpiar"), class = "btn-default")
       )
     ))
   })
@@ -3331,7 +3646,7 @@ server <- function(input, output, session) {
     
     removeModal()
     showNotification(
-      paste("Resaltados eliminados de", archivo_actual),
+      tr("notifications.resaltados_eliminados", file = archivo_actual),
       type = "message",
       duration = 3
     )
@@ -3340,16 +3655,16 @@ server <- function(input, output, session) {
   # Función para eliminar todos los resaltados
   observeEvent(input$eliminarTodosResaltes, {
     showModal(modalDialog(
-      title = div(icon("exclamation-triangle"), " Confirmación"),
+      title = div(icon("exclamation-triangle"), paste0(" ", tr("modals.confirmacion"))),
       div(
         class = "danger-panel",
-        h4("¿Eliminar TODOS los resaltados?", style = "color: #c0392b;"),
-        p("Esta acción eliminará todos los códigos aplicados en todos los documentos.", style = "color: #a93226;"),
-        p(strong("Esta acción no se puede deshacer."), style = "color: #8b1538; font-size: 16px;")
+        h4(tr("modals.eliminar_todos_resaltados"), style = "color: #c0392b;"),
+        p(tr("modals.eliminar_todos_desc"), style = "color: #a93226;"),
+        p(strong(tr("modals.no_deshacer")), style = "color: #8b1538; font-size: 16px;")
       ),
       footer = tagList(
-        modalButton("Cancelar"),
-        actionButton("confirmarEliminacionTotal", "Sí, eliminar todo", class = "btn-default")
+        modalButton(tr("modals.cancelar")),
+        actionButton("confirmarEliminacionTotal", tr("modals.si_eliminar_todo"), class = "btn-default")
       )
     ))
   })
@@ -3358,7 +3673,7 @@ server <- function(input, output, session) {
     rv$tabla <- rv$tabla[0, ]  # Vaciar tabla manteniendo estructura
     
     removeModal()
-    showNotification("Todos los resaltados han sido eliminados", type = "warning", duration = 4)
+    showNotification(tr("notifications.todos_eliminados"), type = "warning", duration = 4)
   })
   
   # ========================================
@@ -3382,32 +3697,32 @@ server <- function(input, output, session) {
       texto_fragmento <- fragmento_info$Extracto[1]
       
       showModal(modalDialog(
-        title = div(icon("info-circle"), " Información del Fragmento"),
+        title = div(icon("info-circle"), paste0(" ", tr("modals.info_fragmento"))),
         div(
           div(
             class = "info-panel",
-            h4("Texto:"),
+            h4(tr("modals.texto_label")),
             div(
               style = "background: #f8f9fa; padding: 15px; border-radius: 8px; margin: 10px 0; max-height: 150px; overflow-y: auto; border-left: 4px solid #3498db;",
               texto_fragmento
             )
           ),
           div(
-            class = "info-panel", 
-            h4("Códigos aplicados:"),
+            class = "info-panel",
+            h4(tr("modals.codigos_aplicados_label")),
             p(codigos_aplicados, style = "font-weight: bold; color: #3498db; font-size: 16px;"),
-            h4("Archivo:"),
+            h4(tr("modals.archivo_info_label")),
             p(fragmento_info$Archivo[1], style = "color: #7f8c8d;")
           ),
           if (nrow(fragmento_info) > 1) {
             div(
               class = "info-panel",
-              h5("📈 Historial de codificación:"),
+              h5(tr("modals.historial_codificacion")),
               DTOutput("historialCodificacion")
             )
           }
         ),
-        footer = modalButton("Cerrar"),
+        footer = modalButton(tr("modals.cerrar")),
         size = "m"
       ))
       
@@ -3428,7 +3743,7 @@ server <- function(input, output, session) {
               lengthChange = FALSE,
               dom = 't'
             ),
-            colnames = c("Código", "Categoría", "Aplicado")
+            colnames = c(tr("colnames.codigo"), tr("colnames.categoria"), tr("colnames.aplicado"))
           )
         }, server = FALSE)
       }
@@ -3441,51 +3756,51 @@ server <- function(input, output, session) {
   
   observeEvent(input$ayuda, {
     showModal(modalDialog(
-      title = div(icon("question-circle"), " Centro de Ayuda"),
+      title = div(icon("question-circle"), paste0(" ", tr("help.centro_ayuda"))),
       div(
         div(
           class = "info-panel",
-          h4("Modos de Trabajo:"),
+          h4(tr("help.modos_trabajo")),
           div(
             style = "display: grid; grid-template-columns: 1fr 1fr; gap: 20px;",
             div(
-              h5("Modo Seleccionar:", style = "color: #2c3e50;"),
+              h5(tr("help.modo_seleccionar"), style = "color: #2c3e50;"),
               tags$ul(
                 style = "color: #2c3e50;",
-                tags$li("Selecciona texto en el visor de documento"),
-                tags$li("Aplica códigos automáticamente"),
-                tags$li("Resaltado inmediato en tiempo real")
+                tags$li(tr("help.selecciona_texto_visor")),
+                tags$li(tr("help.aplica_codigos_auto")),
+                tags$li(tr("help.resaltado_tiempo_real"))
               )
             ),
             div(
-              h5("Modo Deseleccionar:", style = "color: #c0392b;"),
+              h5(tr("help.modo_deseleccionar"), style = "color: #c0392b;"),
               tags$ul(
                 style = "color: #2c3e50;",
-                tags$li("Clic directo en resaltado"),
-                tags$li("Elimina códigos específicos"),
-                tags$li("Corrección precisa")
+                tags$li(tr("help.clic_resaltado")),
+                tags$li(tr("help.elimina_codigos")),
+                tags$li(tr("help.correccion_precisa"))
               )
             )
           )
         ),
-        
+
         div(
           class = "info-panel",
-          h4("Características Avanzadas:"),
+          h4(tr("help.caracteristicas_avanzadas")),
           div(
             style = "display: grid; grid-template-columns: 1fr 1fr; gap: 20px;",
             div(
-              h5("Modo Acumulativo:", style = "color: #2c3e50;"),
-              p("Permite aplicar múltiples códigos al mismo fragmento de texto", style = "color: #2c3e50;")
+              h5(tr("help.modo_acumulativo"), style = "color: #2c3e50;"),
+              p(tr("help.acumulativo_desc"), style = "color: #2c3e50;")
             ),
             div(
-              h5("Visualización:", style = "color: #2c3e50;"),
-              p("Gradientes muestran fragmentos con varios códigos", style = "color: #2c3e50;")
+              h5(tr("help.visualizacion"), style = "color: #2c3e50;"),
+              p(tr("help.gradientes_desc"), style = "color: #2c3e50;")
             )
           )
         )
       ),
-      footer = modalButton("Entendido"),
+      footer = modalButton(tr("help.entendido")),
       size = "l"
     ))
   })
@@ -3518,7 +3833,7 @@ server <- function(input, output, session) {
     "))
     
     showNotification(
-      "Cita copiada al portapapeles",
+      tr("notifications.cita_copiada"),
       type = "message",
       duration = 3
     )
@@ -3529,8 +3844,9 @@ server <- function(input, output, session) {
   # ========================================
   
   output$tablaResaltes <- renderDT({
+    current_lang()
     req(nrow(rv$tabla) > 0)
-    
+
     tabla_mostrar <- rv$tabla %>%
       arrange(desc(Timestamp)) %>%
       select(Extracto, Codigo, Categoria, Archivo, Timestamp) %>%
@@ -3538,7 +3854,7 @@ server <- function(input, output, session) {
         Extracto = str_trunc(Extracto, 60),
         Timestamp = format(Timestamp, "%H:%M:%S")
       )
-    
+
     # Crear el datatable
     dt <- datatable(
       tabla_mostrar,
@@ -3548,10 +3864,10 @@ server <- function(input, output, session) {
         scrollX = TRUE,
         dom = 'frtip',
         language = list(
-          search = "Buscar:",
-          lengthMenu = "Mostrar _MENU_ resaltados",
-          info = "Mostrando _START_ a _END_ de _TOTAL_ resaltados",
-          paginate = list(previous = "Anterior", `next` = "Siguiente")
+          search = tr("datatable.search"),
+          lengthMenu = tr("datatable.lengthMenu_resaltados"),
+          info = tr("datatable.info_resaltados"),
+          paginate = list(previous = tr("datatable.paginate_previous"), `next` = tr("datatable.paginate_next"))
         ),
         columnDefs = list(
           list(targets = 0, width = "250px"),
@@ -3561,7 +3877,7 @@ server <- function(input, output, session) {
           list(targets = 4, width = "80px")
         )
       ),
-      colnames = c("Extracto", "Código", "Categoría", "Archivo", "Hora")
+      colnames = c(tr("colnames.extracto"), tr("colnames.codigo"), tr("colnames.categoria"), tr("colnames.archivo"), tr("colnames.hora"))
     )
     
     # Aplicar formatStyle solo si hay códigos disponibles
@@ -3601,18 +3917,18 @@ server <- function(input, output, session) {
     fila_eliminar <- tabla_ordenada[sel, ]
     
     showModal(modalDialog(
-      title = div(icon("exclamation-triangle"), " Confirmar Eliminación"),
+      title = div(icon("exclamation-triangle"), paste0(" ", tr("modals.confirmar_eliminacion_extracto"))),
       div(
-        h4("¿Eliminar este resaltado?", style = "color: #c0392b;"),
+        h4(tr("modals.eliminar_resaltado_pregunta"), style = "color: #c0392b;"),
         div(
           class = "info-panel",
-          p(paste("Código:", strong(fila_eliminar$Codigo)), style = "margin: 5px 0;"),
-          p(paste("Fragmento:", strong(str_trunc(fila_eliminar$Extracto, 40))), style = "margin: 5px 0;")
+          p(paste0(tr("modals.codigo_modal"), strong(fila_eliminar$Codigo)), style = "margin: 5px 0;"),
+          p(paste0(tr("modals.fragmento_modal"), strong(str_trunc(fila_eliminar$Extracto, 40))), style = "margin: 5px 0;")
         )
       ),
       footer = tagList(
-        modalButton("Cancelar"),
-        actionButton("confirmarEliminacion", "Eliminar", class = "btn-default")
+        modalButton(tr("modals.cancelar")),
+        actionButton("confirmarEliminacion", tr("modals.eliminar"), class = "btn-default")
       )
     ))
   })
@@ -3634,7 +3950,7 @@ server <- function(input, output, session) {
                  Timestamp == fila_eliminar$Timestamp))
     
     removeModal()
-    showNotification("Resaltado eliminado", type = "message", duration = 3)
+    showNotification(tr("notifications.resaltado_eliminado"), type = "message", duration = 3)
   })
   
   # ========================================
@@ -3642,40 +3958,42 @@ server <- function(input, output, session) {
   # ========================================
   
   output$descarga <- downloadHandler(
-    filename = function() paste0("resaltados_rcualitext_", Sys.Date(), ".xlsx"),
+    filename = function() paste0(if (current_lang() == "es") "resaltados_rcualitext_" else "highlights_rcualitext_", Sys.Date(), ".xlsx"),
     content = function(file) {
       wb <- createWorkbook()
       
       # Hoja principal con todos los resaltados
-      addWorksheet(wb, "Resaltados_Detallados")
-      writeData(wb, "Resaltados_Detallados", rv$tabla)
+      sheet1_name <- tr("excel.resaltados_detallados")
+      addWorksheet(wb, sheet1_name)
+      writeData(wb, sheet1_name, rv$tabla)
       
       # Hoja con resumen de fragmentos únicos
       resumen_fragmentos <- rv$tabla %>%
         group_by(Extracto, Archivo, FragmentId) %>%
         summarise(
-          Codigos_Aplicados = paste(Codigo, collapse = "; "),
-          Num_Codigos = n(),
-          Primera_Codificacion = min(Timestamp),
-          Ultima_Codificacion = max(Timestamp),
+          !!tr("excel.codigos_aplicados_col") := paste(Codigo, collapse = "; "),
+          !!tr("excel.num_codigos") := n(),
+          !!tr("excel.primera_codificacion") := min(Timestamp),
+          !!tr("excel.ultima_codificacion") := max(Timestamp),
           .groups = "drop"
         ) %>%
-        arrange(desc(Num_Codigos))
-      
-      addWorksheet(wb, "Resumen_Fragmentos")
-      writeData(wb, "Resumen_Fragmentos", resumen_fragmentos)
+        arrange(desc(.data[[tr("excel.num_codigos")]]))
+
+      sheet2_name <- tr("excel.resumen_fragmentos")
+      addWorksheet(wb, sheet2_name)
+      writeData(wb, sheet2_name, resumen_fragmentos)
       
       # Hoja con estadísticas
       estadisticas <- tibble(
-        Metrica = c(
-          "Total de Resaltados",
-          "Fragmentos Únicos",
-          "Fragmentos con Múltiples Códigos",
-          "Promedio de Códigos por Fragmento",
-          "Documentos Procesados",
-          "Códigos Diferentes Utilizados"
+        !!tr("excel.metrica") := c(
+          tr("excel.total_resaltados"),
+          tr("excel.fragmentos_unicos"),
+          tr("excel.fragmentos_multiples_codigos"),
+          tr("excel.promedio_codigos"),
+          tr("excel.documentos_procesados"),
+          tr("excel.codigos_utilizados")
         ),
-        Valor = c(
+        !!tr("excel.valor") := c(
           nrow(rv$tabla),
           length(unique(rv$tabla$FragmentId)),
           sum(table(rv$tabla$FragmentId) > 1),
@@ -3685,12 +4003,13 @@ server <- function(input, output, session) {
         )
       )
       
-      addWorksheet(wb, "Estadisticas")
-      writeData(wb, "Estadisticas", estadisticas)
+      sheet3_name <- tr("excel.estadisticas")
+      addWorksheet(wb, sheet3_name)
+      writeData(wb, sheet3_name, estadisticas)
       
       saveWorkbook(wb, file, overwrite = TRUE)
       
-      showNotification("Datos exportados exitosamente", type = "message", duration = 3)
+      showNotification(tr("notifications.datos_exportados"), type = "message", duration = 3)
     }
   )
   
@@ -3704,9 +4023,10 @@ server <- function(input, output, session) {
 
     tryCatch({
       # plot_codigos ahora devuelve un objeto plotly directamente
-      plot_codigos(rv$tabla, fill = input$fillToggle, code_colors = get_code_colors())
+      plot_codigos(rv$tabla, fill = input$fillToggle, code_colors = get_code_colors(),
+                   labels = list(freq = tr("plots.frecuencia"), codes = tr("plots.codigos_x"), cat = tr("plots.categoria_fill"), sin_cat = tr("plots.sin_categoria")))
     }, error = function(e) {
-      showNotification(paste("Error al generar gráfico:", e$message), type = "error")
+      showNotification(tr("notifications.error_grafico", msg = e$message), type = "error")
       NULL
     })
   })
@@ -3715,7 +4035,8 @@ server <- function(input, output, session) {
     # Hacer que dependa tanto de la tabla como de los códigos
     req(nrow(rv$tabla) > 0, nrow(rv$codigosDF) >= 0)
     
-    result <- plot_network_and_centrality(rv$tabla, code_colors = get_code_colors())
+    result <- plot_network_and_centrality(rv$tabla, code_colors = get_code_colors(),
+                                          labels = list(code = tr("plots.codigo_label"), centrality = tr("plots.centralidad_zscore")))
     result$plot
   }, res = 96, bg = "transparent")
   
@@ -3724,7 +4045,7 @@ server <- function(input, output, session) {
   # ========================================
   
   output$saveState <- downloadHandler(
-    filename = function() paste0("proyecto_rcualitext_", Sys.Date(), ".rds"),
+    filename = function() paste0(if (current_lang() == "es") "proyecto_rcualitext_" else "project_rcualitext_", Sys.Date(), ".rds"),
     content = function(file) {
       estado <- list(
         # Datos básicos
@@ -3758,13 +4079,13 @@ server <- function(input, output, session) {
           total_docs = length(rv$docs),
           ia_results_count = if(!is.null(rv$ia_results)) nrow(rv$ia_results) else 0,
           embeddings_count = if(!is.null(rv$hf_embeddings)) nrow(rv$hf_embeddings) else 0,
-          red_semantica = if(!is.null(rv$red_semantica)) "Sí" else "No",
+          red_semantica = if(!is.null(rv$red_semantica)) "Yes" else "No",
           visualizacion_2d = if(!is.null(rv$visualizacion_2d)) rv$visualizacion_2d$metodo else "No"
         )
       )
       saveRDS(estado, file)
 
-      showNotification("Proyecto guardado exitosamente (incluye Análisis Semántico y Visualización 2D)", type = "message", duration = 3)
+      showNotification(tr("notifications.proyecto_guardado"), type = "message", duration = 3)
     }
   )
   
@@ -3782,7 +4103,7 @@ server <- function(input, output, session) {
           )
         
         showNotification(
-          "Proyecto convertido al nuevo formato con soporte para deselección",
+          tr("notifications.proyecto_convertido"),
           type = "message",
           duration = 5
         )
@@ -3821,7 +4142,7 @@ server <- function(input, output, session) {
       if (nrow(rv$tabla) > 0) {
         rv$tabla <- rv$tabla %>%
           mutate(Categoria = case_when(
-            is.na(Categoria) | Categoria == "" ~ "Sin categoría",
+            is.na(Categoria) | Categoria == "" ~ tr("categorias.sin_categoria"),
             TRUE ~ Categoria
           ))
       }
@@ -3842,23 +4163,23 @@ server <- function(input, output, session) {
       if (!is.null(est$metadata)) {
         ia_info <- ""
         if (!is.null(est$metadata$ia_results_count) && est$metadata$ia_results_count > 0) {
-          ia_info <- paste0(", ", est$metadata$ia_results_count, " resultados IA")
+          ia_info <- paste0(", ", est$metadata$ia_results_count, " ", tr("notifications.meta_resultados_ia"))
         }
         metadata_info <- paste0(
-          " (", est$metadata$total_codes, " códigos, ",
-          est$metadata$total_highlights, " resaltados", ia_info, ")"
+          " (", est$metadata$total_codes, " ", tr("notifications.meta_codigos"), ", ",
+          est$metadata$total_highlights, " ", tr("notifications.meta_resaltados"), ia_info, ")"
         )
       }
       
       showNotification(
-        paste0("Proyecto cargado exitosamente", metadata_info),
+        tr("notifications.proyecto_cargado", info = metadata_info),
         type = "message",
         duration = 4
       )
-      
+
     }, error = function(e) {
       showNotification(
-        paste("Error al cargar el proyecto:", e$message),
+        tr("notifications.error_cargar_proyecto", msg = e$message),
         type = "error",
         duration = 5
       )
@@ -3881,23 +4202,23 @@ server <- function(input, output, session) {
   output$currentModeInfo <- renderUI({
     div(
       class = "info-panel",
-      h5(icon("mouse-pointer"), " Modo Seleccionar Activo", style = "color: #2c3e50; margin-bottom: 15px;"),
+      h5(icon("mouse-pointer"), paste0(" ", tr("modes.seleccionar_activo")), style = "color: #2c3e50; margin-bottom: 15px;"),
       div(
         style = "display: grid; grid-template-columns: 1fr 1fr; gap: 15px;",
         div(
-          h6("Acciones disponibles:", style = "color: #2c3e50; margin-bottom: 8px;"),
+          h6(tr("modes.acciones_disponibles"), style = "color: #2c3e50; margin-bottom: 8px;"),
           tags$ul(
             style = "font-size: 13px; color: #7f8c8d; margin: 0;",
-            tags$li("Selecciona texto en el visor de documento"),
-            tags$li("Aplica códigos automáticamente")
+            tags$li(tr("modes.selecciona_texto")),
+            tags$li(tr("modes.aplica_codigos"))
           )
         ),
         div(
-          h6("Características:", style = "color: #2c3e50; margin-bottom: 8px;"),
+          h6(tr("modes.caracteristicas"), style = "color: #2c3e50; margin-bottom: 8px;"),
           tags$ul(
             style = "font-size: 13px; color: #7f8c8d; margin: 0;",
-            tags$li("Modo acumulativo disponible"),
-            tags$li("Clic en resaltado = info")
+            tags$li(tr("modes.acumulativo_disponible")),
+            tags$li(tr("modes.clic_info"))
           )
         )
       )
@@ -3908,7 +4229,7 @@ server <- function(input, output, session) {
   observe({
     if (is.null(rv$docs) || length(rv$docs) == 0) {
       showNotification(
-        "¡Bienvenido a RCualiText! Carga tus documentos para comenzar.",
+        tr("notifications.bienvenido"),
         type = "message",
         duration = 5
       )
@@ -3926,18 +4247,22 @@ server <- function(input, output, session) {
     df <- switch(ext,
                  csv  = read.csv(input$dict_ia$datapath, stringsAsFactors = FALSE),
                  xlsx = read_excel(input$dict_ia$datapath),
-                 stop("Formato de diccionario no soportado"))
+                 stop(tr("notifications.formato_diccionario_error")))
     
-    # Validar columnas
+    # Validar columnas (accept Spanish or English column names)
     expected_cols <- c("Categoría", "Código", "Definición")
     if (!all(expected_cols %in% names(df))) {
-      # Intentar con nombres alternativos
+      # Intentar con nombres alternativos en español sin tildes
       if (all(c("Categoria", "Codigo", "Definicion") %in% names(df))) {
         names(df)[names(df) == "Categoria"] <- "Categoría"
         names(df)[names(df) == "Codigo"] <- "Código"
         names(df)[names(df) == "Definicion"] <- "Definición"
+      } else if (all(c("Category", "Code", "Definition") %in% names(df))) {
+        names(df)[names(df) == "Category"] <- "Categoría"
+        names(df)[names(df) == "Code"] <- "Código"
+        names(df)[names(df) == "Definition"] <- "Definición"
       } else {
-        stop("El diccionario debe tener columnas: Categoría, Código, Definición")
+        stop(tr("notifications.columnas_diccionario_error"))
       }
     }
     df
@@ -3947,27 +4272,27 @@ server <- function(input, output, session) {
   observeEvent(input$run_ia_analysis, {
     # Validaciones
     if (is.null(rv$docs) || length(rv$docs) == 0) {
-      showNotification("Carga al menos un documento en la pestaña 'Documento'", type = "error", duration = 3)
+      showNotification(tr("notifications.carga_documentos"), type = "error", duration = 3)
       return()
     }
 
     dict <- tryCatch(dict_ia_df(), error = function(e) NULL)
     if (is.null(dict) || nrow(dict) == 0) {
-      showNotification("Carga un diccionario de códigos válido", type = "error", duration = 3)
+      showNotification(tr("notifications.carga_diccionario"), type = "error", duration = 3)
       return()
     }
 
     # Validar API Key de OpenAI
     api_key <- input$openai_api_key
     if (is.null(api_key) || !nzchar(trimws(api_key))) {
-      showNotification("Ingresa tu API Key de OpenAI", type = "error", duration = 3)
+      showNotification(tr("notifications.ingresa_api_key"), type = "error", duration = 3)
       return()
     }
 
     n_codes <- nrow(dict)
     total <- length(rv$docs) * n_codes
 
-    withProgress(message = "Analizando con GPT-4.1...", value = 0, {
+    withProgress(message = tr("progress.analizando_gpt"), value = 0, {
       results_list <- vector("list", total)
       step <- 0
 
@@ -3984,18 +4309,26 @@ server <- function(input, output, session) {
           incProgress(amount = 1/total,
                       detail = paste(doc_name, "-", code))
 
-          prompt <- paste0(
-            "Del texto:\n\n", doc_text,
-            "\n\nExtrae fragmentos que correspondan a la siguiente definición:\n\"",
-            def, "\"\n\nResponde solo con los fragmentos extraídos, uno por línea."
-          )
+          prompt <- if (current_lang() == "es") {
+            paste0(
+              "Del texto:\n\n", doc_text,
+              "\n\nExtrae fragmentos que correspondan a la siguiente definición:\n\"",
+              def, "\"\n\nResponde solo con los fragmentos extraídos, uno por línea."
+            )
+          } else {
+            paste0(
+              "From the text:\n\n", doc_text,
+              "\n\nExtract fragments that match the following definition:\n\"",
+              def, "\"\n\nRespond only with the extracted fragments, one per line."
+            )
+          }
 
           tryCatch({
             txt_out <- tryCatch({
               call_openai_api(prompt, api_key)
             }, error = function(e) {
               showNotification(
-                paste("Error OpenAI -", code, ":", e$message),
+                tr("notifications.error_openai", code = code, msg = e$message),
                 type = "warning",
                 duration = 5
               )
@@ -4025,7 +4358,7 @@ server <- function(input, output, session) {
             }
           }, error = function(e) {
             showNotification(
-              paste("Error inesperado -", code, ":", e$message),
+              tr("notifications.error_inesperado", code = code, msg = e$message),
               type = "warning",
               duration = 5
             )
@@ -4081,13 +4414,13 @@ server <- function(input, output, session) {
       # Verificar si se obtuvieron resultados
       if (nrow(rv$ia_results) == 0) {
         showNotification(
-          "No se pudieron extraer fragmentos. Verifica tu API Key y conexión.",
+          tr("notifications.no_extraer_fragmentos"),
           type = "warning",
           duration = 5
         )
       } else {
         showNotification(
-          paste("Análisis IA completado:", nrow(rv$ia_results), "extractos encontrados"),
+          tr("notifications.analisis_ia_completado", n = nrow(rv$ia_results)),
           type = "message",
           duration = 3
         )
@@ -4097,22 +4430,23 @@ server <- function(input, output, session) {
   
   # Mostrar resultados IA
   output$tabla_ia_results <- renderDT({
+    current_lang()
     req(nrow(rv$ia_results) > 0)
-    
+
     datatable(
       rv$ia_results,
       options = list(
         pageLength = 10,
         scrollX = TRUE,
         language = list(
-          search = "Buscar:",
-          lengthMenu = "Mostrar _MENU_ registros",
-          info = "Mostrando _START_ a _END_ de _TOTAL_ registros",
+          search = tr("datatable.search"),
+          lengthMenu = tr("datatable.lengthMenu_registros"),
+          info = tr("datatable.info_registros"),
           paginate = list(
-            first = "Primero",
-            last = "Último",
-            `next` = "Siguiente",
-            previous = "Anterior"
+            first = tr("datatable.paginate_first"),
+            last = tr("datatable.paginate_last"),
+            `next` = tr("datatable.paginate_next"),
+            previous = tr("datatable.paginate_previous")
           )
         )
       ),
@@ -4133,7 +4467,7 @@ server <- function(input, output, session) {
       p <- ggplot(freq_data, aes(x = reorder(Codigo, Frecuencia), y = Frecuencia, fill = Categoria)) +
         geom_col() +
         coord_flip() +
-        labs(x = "Código", y = "Frecuencia", fill = "Categoría") +
+        labs(x = tr("plots.codigo_label"), y = tr("plots.frecuencia"), fill = tr("plots.categoria_fill")) +
         theme_minimal() +
         theme(
           legend.position = "right",
@@ -4206,11 +4540,12 @@ server <- function(input, output, session) {
       
       # Crear workbook
       wb <- createWorkbook()
-      addWorksheet(wb, "Resultados IA")
-      
+      ia_sheet <- tr("fuente.ia")
+      addWorksheet(wb, ia_sheet)
+
       # Escribir los datos
-      writeData(wb, "Resultados IA", rv$ia_results)
-      
+      writeData(wb, ia_sheet, rv$ia_results)
+
       # Aplicar estilos al encabezado
       headerStyle <- createStyle(
         fontSize = 12,
@@ -4221,11 +4556,11 @@ server <- function(input, output, session) {
         borderColour = "#4F81BD",
         textDecoration = "bold"
       )
-      
-      addStyle(wb, sheet = "Resultados IA", headerStyle, rows = 1, cols = 1:5, gridExpand = TRUE)
-      
+
+      addStyle(wb, sheet = ia_sheet, headerStyle, rows = 1, cols = 1:5, gridExpand = TRUE)
+
       # Ajustar anchos de columna
-      setColWidths(wb, sheet = "Resultados IA", cols = 1:5, widths = c(25, 20, 20, 40, 50))
+      setColWidths(wb, sheet = ia_sheet, cols = 1:5, widths = c(25, 20, 20, 40, 50))
 
       # Guardar
       saveWorkbook(wb, file, overwrite = TRUE)
@@ -4242,14 +4577,15 @@ server <- function(input, output, session) {
     content = function(file) {
       req(rv$ia_results, nrow(rv$ia_results) > 0)
       wb <- createWorkbook()
-      addWorksheet(wb, "Análisis IA")
-      writeData(wb, "Análisis IA", rv$ia_results)
+      ia_sheet2 <- tr("fuente.ia")
+      addWorksheet(wb, ia_sheet2)
+      writeData(wb, ia_sheet2, rv$ia_results)
       headerStyle <- createStyle(fontSize = 12, fontColour = "#FFFFFF", halign = "center",
                                   fgFill = "#27ae60", textDecoration = "bold")
-      addStyle(wb, sheet = "Análisis IA", headerStyle, rows = 1, cols = 1:ncol(rv$ia_results), gridExpand = TRUE)
-      setColWidths(wb, sheet = "Análisis IA", cols = 1:ncol(rv$ia_results), widths = "auto")
+      addStyle(wb, sheet = ia_sheet2, headerStyle, rows = 1, cols = 1:ncol(rv$ia_results), gridExpand = TRUE)
+      setColWidths(wb, sheet = ia_sheet2, cols = 1:ncol(rv$ia_results), widths = "auto")
       saveWorkbook(wb, file, overwrite = TRUE)
-      showNotification("Tabla IA descargada", type = "message", duration = 3)
+      showNotification(tr("notifications.tabla_ia_descargada"), type = "message", duration = 3)
     }
   )
 
@@ -4269,12 +4605,12 @@ server <- function(input, output, session) {
         ggplot(aes(x = Codigo, y = n, fill = Codigo)) +
         geom_col(show.legend = FALSE) +
         coord_flip() +
-        labs(title = "Distribución de Códigos (Análisis IA)", x = "Código", y = "Frecuencia") +
+        labs(title = tr("plots.distribucion_codigos_ia"), x = tr("plots.codigo_label"), y = tr("plots.frecuencia")) +
         theme_minimal(base_size = 14) +
         theme(plot.title = element_text(face = "bold", hjust = 0.5))
 
       ggsave(file, plot = p, width = ancho, height = alto, dpi = dpi, bg = "white")
-      showNotification(paste0("Figura descargada (", ancho, "×", alto, " pulg, ", dpi, " DPI)"), type = "message", duration = 3)
+      showNotification(tr("notifications.figura_descargada", w = ancho, h = alto, dpi = dpi), type = "message", duration = 3)
     }
   )
 
@@ -4293,12 +4629,12 @@ server <- function(input, output, session) {
         ggplot(aes(x = "", y = n, fill = Categoria)) +
         geom_col(width = 1) +
         coord_polar(theta = "y") +
-        labs(title = "Fragmentos por Categoría (Análisis IA)", fill = "Categoría") +
+        labs(title = tr("plots.fragmentos_categoria_ia"), fill = tr("plots.categoria_fill")) +
         theme_void(base_size = 14) +
         theme(plot.title = element_text(face = "bold", hjust = 0.5))
 
       ggsave(file, plot = p, width = ancho, height = alto, dpi = dpi, bg = "white")
-      showNotification(paste0("Figura descargada (", ancho, "×", alto, " pulg, ", dpi, " DPI)"), type = "message", duration = 3)
+      showNotification(tr("notifications.figura_descargada", w = ancho, h = alto, dpi = dpi), type = "message", duration = 3)
     }
   )
 
@@ -4321,7 +4657,7 @@ server <- function(input, output, session) {
       addStyle(wb, sheet = "Clustering", headerStyle, rows = 1, cols = 1:ncol(datos), gridExpand = TRUE)
       setColWidths(wb, sheet = "Clustering", cols = 1:ncol(datos), widths = "auto")
       saveWorkbook(wb, file, overwrite = TRUE)
-      showNotification("Tabla de clustering descargada", type = "message", duration = 3)
+      showNotification(tr("notifications.tabla_clustering_descargada"), type = "message", duration = 3)
     }
   )
 
@@ -4343,12 +4679,12 @@ server <- function(input, output, session) {
       )
       p <- ggplot(plot_data, aes(x = PC1, y = PC2, color = Cluster)) +
         geom_point(size = 3, alpha = 0.7) +
-        labs(title = "Clustering Semántico", x = "PC1", y = "PC2", color = "Cluster") +
+        labs(title = tr("plots.clustering_semantico"), x = "PC1", y = "PC2", color = "Cluster") +
         theme_minimal(base_size = 14) +
         theme(plot.title = element_text(face = "bold", hjust = 0.5))
 
       ggsave(file, plot = p, width = ancho, height = alto, dpi = dpi, bg = "white")
-      showNotification(paste0("Figura descargada (", ancho, "×", alto, " pulg, ", dpi, " DPI)"), type = "message", duration = 3)
+      showNotification(tr("notifications.figura_descargada", w = ancho, h = alto, dpi = dpi), type = "message", duration = 3)
     }
   )
 
@@ -4365,7 +4701,7 @@ server <- function(input, output, session) {
       addStyle(wb, sheet = "Similitud", headerStyle, rows = 1, cols = 1:ncol(rv$similares_encontrados), gridExpand = TRUE)
       setColWidths(wb, sheet = "Similitud", cols = 1:ncol(rv$similares_encontrados), widths = "auto")
       saveWorkbook(wb, file, overwrite = TRUE)
-      showNotification("Tabla de similitud descargada", type = "message", duration = 3)
+      showNotification(tr("notifications.tabla_similitud_descargada"), type = "message", duration = 3)
     }
   )
 
@@ -4388,14 +4724,16 @@ server <- function(input, output, session) {
       p <- ggplot(plot_data, aes(x = X, y = Y, color = Codigo)) +
         geom_point(size = 3, alpha = 0.7) +
         labs(
-          title = paste("Visualización de Embeddings (", toupper(metodo), ")", sep = ""),
-          x = paste(toupper(metodo), "Dim 1"), y = paste(toupper(metodo), "Dim 2"), color = "Código"
+          title = tr("plots.visualizacion_embeddings", method = toupper(metodo)),
+          x = tr("plots.dimension_1", method = toupper(metodo)),
+          y = tr("plots.dimension_2", method = toupper(metodo)),
+          color = tr("plots.codigo_label")
         ) +
         theme_minimal(base_size = 14) +
         theme(plot.title = element_text(face = "bold", hjust = 0.5), legend.position = "right")
 
       ggsave(file, plot = p, width = ancho, height = alto, dpi = dpi, bg = "white")
-      showNotification(paste0("Figura descargada (", ancho, "×", alto, " pulg, ", dpi, " DPI)"), type = "message", duration = 3)
+      showNotification(tr("notifications.figura_descargada", w = ancho, h = alto, dpi = dpi), type = "message", duration = 3)
     }
   )
 
@@ -4412,7 +4750,7 @@ server <- function(input, output, session) {
       addStyle(wb, sheet = "Coherencia", headerStyle, rows = 1, cols = 1:ncol(rv$semantico_coherencia), gridExpand = TRUE)
       setColWidths(wb, sheet = "Coherencia", cols = 1:ncol(rv$semantico_coherencia), widths = "auto")
       saveWorkbook(wb, file, overwrite = TRUE)
-      showNotification("Tabla de coherencia descargada", type = "message", duration = 3)
+      showNotification(tr("notifications.tabla_coherencia_descargada"), type = "message", duration = 3)
     }
   )
 
@@ -4430,25 +4768,27 @@ server <- function(input, output, session) {
         arrange(desc(Coherencia_Media))
 
       if (nrow(datos) == 0) {
-        showNotification("No hay datos de coherencia para graficar", type = "error", duration = 3)
+        showNotification(tr("notifications.no_datos_coherencia"), type = "error", duration = 3)
         return(NULL)
       }
+
+      # Translate evaluation labels for display
+      eval_labels <- c("excellent" = tr("evaluacion.excelente"), "good" = tr("evaluacion.buena"),
+                        "moderate" = tr("evaluacion.moderada"), "low_review" = tr("evaluacion.baja_revisar"))
+      datos <- datos %>% mutate(Evaluacion = ifelse(Evaluacion %in% names(eval_labels), eval_labels[Evaluacion], Evaluacion))
+      eval_colors <- stats::setNames(c("#27ae60", "#2ecc71", "#f39c12", "#e74c3c"),
+                                     c(tr("evaluacion.excelente"), tr("evaluacion.buena"), tr("evaluacion.moderada"), tr("evaluacion.baja_revisar")))
 
       p <- ggplot(datos, aes(x = reorder(Codigo, Coherencia_Media), y = Coherencia_Media, fill = Evaluacion)) +
         geom_col() +
         geom_errorbar(aes(ymin = Coherencia_Min, ymax = Coherencia_Max), width = 0.2, alpha = 0.7) +
         coord_flip() +
-        scale_fill_manual(values = c(
-          "Excelente" = "#27ae60",
-          "Buena" = "#2ecc71",
-          "Moderada" = "#f39c12",
-          "Baja - revisar" = "#e74c3c"
-        )) +
+        scale_fill_manual(values = eval_colors) +
         labs(
-          title = "Coherencia Semántica por Código",
-          x = "Código",
-          y = "Coherencia Media (similitud coseno)",
-          fill = "Evaluación"
+          title = tr("plots.coherencia_semantica"),
+          x = tr("plots.codigo_label"),
+          y = tr("plots.coherencia_media_label"),
+          fill = tr("plots.evaluacion_fill")
         ) +
         theme_minimal(base_size = 12) +
         theme(
@@ -4458,7 +4798,7 @@ server <- function(input, output, session) {
         geom_hline(yintercept = 0.6, linetype = "dashed", color = "#7f8c8d", alpha = 0.7)
 
       ggsave(file, plot = p, width = ancho, height = alto, dpi = dpi, bg = "white")
-      showNotification(paste0("Figura descargada (", ancho, "×", alto, " pulg, ", dpi, " DPI)"), type = "message", duration = 3)
+      showNotification(tr("notifications.figura_descargada", w = ancho, h = alto, dpi = dpi), type = "message", duration = 3)
     }
   )
 
@@ -4481,10 +4821,10 @@ server <- function(input, output, session) {
           tidygraph::activate(nodes) %>%
           tidygraph::mutate(comunidad = factor(comunidades$membership))
         color_var <- "comunidad"
-        color_title <- "Comunidad"
+        color_title <- tr("plots.comunidad")
       } else {
         color_var <- "categoria"
-        color_title <- "Categoría"
+        color_title <- tr("plots.categoria_fill")
       }
 
       # Crear el gráfico con ggraph (mismo código que renderPlot)
@@ -4510,8 +4850,8 @@ server <- function(input, output, session) {
         ggraph::scale_edge_width(range = c(0.5, 3)) +
         ggplot2::scale_size_continuous(range = c(5, 20), guide = "none") +
         ggplot2::labs(
-          title = "Red Semántica de Códigos",
-          subtitle = paste("Umbral de similitud:", input$umbral_red_semantica),
+          title = tr("plots.red_semantica_codigos"),
+          subtitle = tr("plots.umbral_similitud_subtitle", val = input$umbral_red_semantica),
           color = color_title
         ) +
         ggraph::theme_graph(base_family = "sans") +
@@ -4533,7 +4873,7 @@ server <- function(input, output, session) {
       }
 
       ggsave(file, plot = p, width = ancho, height = alto, dpi = dpi, bg = "white")
-      showNotification(paste0("Red semántica descargada (", ancho, "×", alto, " pulg, ", dpi, " DPI)"), type = "message", duration = 3)
+      showNotification(tr("notifications.red_semantica_descargada", w = ancho, h = alto, dpi = dpi), type = "message", duration = 3)
     }
   )
 
@@ -4543,20 +4883,21 @@ server <- function(input, output, session) {
 
   # Estado de embeddings
   output$estado_embeddings <- renderUI({
+    current_lang()
     if (is.null(rv$hf_embeddings)) {
       div(
         style = "color: #7f8c8d;",
         icon("circle", class = "text-muted"),
-        " Sin embeddings generados"
+        paste0(" ", tr("analisis_semantico.sin_embeddings"))
       )
     } else {
       n_emb <- nrow(rv$hf_embeddings)
       div(
         style = "color: #2c3e50;",
         icon("check-circle", class = "text-success"),
-        paste(" Embeddings generados:", n_emb, "fragmentos"),
+        paste0(" ", tr("analisis_semantico.embeddings_generados", n = n_emb)),
         br(),
-        tags$small(paste("Dimensiones:", ncol(rv$hf_embeddings)), style = "color: #95a5a6;")
+        tags$small(tr("analisis_semantico.dimensiones", d = ncol(rv$hf_embeddings)), style = "color: #95a5a6;")
       )
     }
   })
@@ -4566,7 +4907,7 @@ server <- function(input, output, session) {
     # Validar API Key de OpenAI
     api_key <- input$openai_api_key
     if (is.null(api_key) || !nzchar(trimws(api_key))) {
-      showNotification("Ingresa tu API Key de OpenAI en la pestaña 'Análisis IA'", type = "error", duration = 4)
+      showNotification(tr("notifications.ingresa_api_key_pestana"), type = "error", duration = 4)
       return()
     }
 
@@ -4576,9 +4917,9 @@ server <- function(input, output, session) {
     # Validaciones
     if (ds$n < 2) {
       fuente_msg <- if (ds$fuente == "ninguno") {
-        "Necesitas al menos 2 fragmentos. Usa primero 'Análisis IA' o codifica manualmente."
+        tr("notifications.necesitas_fragmentos")
       } else {
-        paste("Solo tienes", ds$n, "fragmento(s). Necesitas al menos 2.")
+        tr("notifications.solo_fragmentos", n = ds$n)
       }
       showNotification(fuente_msg, type = "error", duration = 4)
       return()
@@ -4587,28 +4928,28 @@ server <- function(input, output, session) {
     # Verificar si los datos han cambiado (usando hash)
     current_hash <- digest::digest(ds$datos$Extracto)
     if (!is.null(rv$hf_cache_hash) && rv$hf_cache_hash == current_hash && !is.null(rv$hf_embeddings)) {
-      showNotification("Los embeddings ya están actualizados", type = "message", duration = 3)
+      showNotification(tr("notifications.embeddings_actualizados"), type = "message", duration = 3)
       return()
     }
 
     # Guardar referencia a los datos usados para embedding
     rv$datos_embedding_ref <- ds$datos
 
-    withProgress(message = "Generando embeddings con OpenAI...", value = 0, {
+    withProgress(message = tr("progress.generando_embeddings"), value = 0, {
       tryCatch({
         textos <- ds$datos$Extracto
 
-        fuente_txt <- if (ds$fuente == "ia") "Análisis IA" else "codificación manual"
-        incProgress(0.1, detail = paste("Usando datos de", fuente_txt, "..."))
+        fuente_txt <- if (ds$fuente == "ia") tr("fuente.ia") else tr("fuente.manual")
+        incProgress(0.1, detail = tr("progress.usando_datos", source = fuente_txt))
 
-        incProgress(0.2, detail = "Conectando con OpenAI Embeddings...")
+        incProgress(0.2, detail = tr("progress.conectando_openai"))
 
         # Usar función de OpenAI para embeddings
         embeddings <- obtener_embeddings_openai(textos, api_key)
 
-        incProgress(0.5, detail = "Embeddings obtenidos via OpenAI")
+        incProgress(0.5, detail = tr("progress.embeddings_obtenidos"))
 
-        incProgress(0.1, detail = "Calculando similitudes...")
+        incProgress(0.1, detail = tr("progress.calculando_similitudes"))
 
         # Calcular matriz de similitud
         similitud <- calcular_similitud_coseno(embeddings)
@@ -4618,10 +4959,10 @@ server <- function(input, output, session) {
         rv$hf_similitud <- similitud
         rv$hf_cache_hash <- current_hash
 
-        incProgress(0.1, detail = "Completado")
+        incProgress(0.1, detail = tr("progress.completado"))
 
         showNotification(
-          paste("Embeddings generados:", nrow(embeddings), "fragmentos (OpenAI)"),
+          tr("notifications.embeddings_generados", n = nrow(embeddings)),
           type = "message",
           duration = 4
         )
@@ -4639,11 +4980,11 @@ server <- function(input, output, session) {
   # Clustering semántico
   observeEvent(input$btn_clustering, {
     if (is.null(rv$hf_embeddings)) {
-      showNotification("Primero genera los embeddings", type = "error", duration = 3)
+      showNotification(tr("notifications.primero_genera_embeddings"), type = "error", duration = 3)
       return()
     }
 
-    withProgress(message = "Ejecutando clustering...", value = 0.3, {
+    withProgress(message = tr("progress.ejecutando_clustering"), value = 0.3, {
       tryCatch({
         resultado <- clustering_semantico(
           embeddings_matrix = rv$hf_embeddings,
@@ -4653,10 +4994,10 @@ server <- function(input, output, session) {
 
         rv$semantico_clusters <- resultado
 
-        incProgress(0.7, detail = "Completado")
+        incProgress(0.7, detail = tr("progress.completado"))
 
         showNotification(
-          paste("Clustering completado:", resultado$n_clusters, "clusters identificados"),
+          tr("notifications.clustering_completado", n = resultado$n_clusters),
           type = "message",
           duration = 4
         )
@@ -4685,13 +5026,13 @@ server <- function(input, output, session) {
         pageLength = 15,
         scrollX = TRUE,
         language = list(
-          search = "Buscar:",
-          info = "Mostrando _START_ a _END_ de _TOTAL_",
-          paginate = list(previous = "Anterior", `next` = "Siguiente")
+          search = tr("datatable.search"),
+          info = tr("datatable.info"),
+          paginate = list(previous = tr("datatable.paginate_previous"), `next` = tr("datatable.paginate_next"))
         )
       ),
       rownames = FALSE,
-      colnames = c("Cluster", "Código", "Categoría", "Extracto", "Archivo")
+      colnames = c(tr("colnames.cluster"), tr("colnames.codigo"), tr("colnames.categoria"), tr("colnames.extracto"), tr("colnames.archivo"))
     ) %>%
       formatStyle(
         "Cluster",
@@ -4719,9 +5060,9 @@ server <- function(input, output, session) {
       Extracto = stringr::str_trunc(rv$datos_embedding_ref$Extracto, 40)
     )
 
-    p <- ggplot(plot_data, aes(x = PC1, y = PC2, color = Cluster, text = paste("Código:", Codigo, "\n", Extracto))) +
+    p <- ggplot(plot_data, aes(x = PC1, y = PC2, color = Cluster, text = paste0(tr("plots.codigo_label"), ": ", Codigo, "\n", Extracto))) +
       geom_point(size = 3, alpha = 0.7) +
-      labs(title = "Clusters Semánticos (PCA)", x = "PC1", y = "PC2") +
+      labs(title = tr("plots.clusters_semanticos_pca"), x = "PC1", y = "PC2") +
       theme_minimal() +
       theme(legend.position = "right")
 
@@ -4736,27 +5077,31 @@ server <- function(input, output, session) {
   # Detección de similitud
   observeEvent(input$btn_similitud, {
     if (is.null(rv$hf_similitud) || is.null(rv$datos_embedding_ref)) {
-      showNotification("Primero genera los embeddings", type = "error", duration = 3)
+      showNotification(tr("notifications.primero_genera_embeddings"), type = "error", duration = 3)
       return()
     }
 
-    withProgress(message = "Buscando fragmentos similares...", value = 0.3, {
+    withProgress(message = tr("progress.buscando_similares"), value = 0.3, {
       tryCatch({
         similares <- detectar_similares_diferente_codigo(
           tabla = rv$datos_embedding_ref,
           similitud_matrix = rv$hf_similitud,
-          umbral = input$umbral_similitud
+          umbral = input$umbral_similitud,
+          labels = list(
+            alta = tr("validacion.alta_similitud"),
+            moderada = tr("validacion.similitud_moderada")
+          )
         )
 
         if (nrow(similares) == 0) {
           showNotification(
-            "No se encontraron inconsistencias con el umbral seleccionado",
+            tr("notifications.no_inconsistencias"),
             type = "message",
             duration = 4
           )
         } else {
           showNotification(
-            paste("Se encontraron", nrow(similares), "posibles inconsistencias"),
+            tr("notifications.inconsistencias_encontradas", n = nrow(similares)),
             type = "warning",
             duration = 4
           )
@@ -4778,7 +5123,7 @@ server <- function(input, output, session) {
     if (nrow(rv$similares_encontrados) == 0) {
       return(
         datatable(
-          tibble(Mensaje = "No se encontraron fragmentos similares con diferente código"),
+          tibble(Mensaje = tr("datatable.no_similares")),
           options = list(dom = 't'),
           rownames = FALSE
         )
@@ -4796,7 +5141,7 @@ server <- function(input, output, session) {
       options = list(
         pageLength = 10,
         scrollX = TRUE,
-        language = list(search = "Buscar:")
+        language = list(search = tr("datatable.search"))
       ),
       rownames = FALSE
     ) %>%
@@ -4810,7 +5155,7 @@ server <- function(input, output, session) {
       formatStyle(
         "Sugerencia",
         color = styleEqual(
-          c("Alta similitud - revisar codificación", "Similitud moderada - considerar unificar"),
+          c(tr("validacion.alta_similitud"), tr("validacion.similitud_moderada")),
           c("#e74c3c", "#f39c12")
         ),
         fontWeight = "bold"
@@ -4820,11 +5165,11 @@ server <- function(input, output, session) {
   # Visualización 2D
   observeEvent(input$btn_visualizar, {
     if (is.null(rv$hf_embeddings)) {
-      showNotification("Primero genera los embeddings", type = "error", duration = 3)
+      showNotification(tr("notifications.primero_genera_embeddings"), type = "error", duration = 3)
       return()
     }
 
-    withProgress(message = "Generando visualización 2D...", value = 0.3, {
+    withProgress(message = tr("progress.generando_visualizacion"), value = 0.3, {
       tryCatch({
         metodo <- input$metodo_visualizacion
         embeddings_matrix <- rv$hf_embeddings
@@ -4856,8 +5201,8 @@ server <- function(input, output, session) {
           timestamp = Sys.time()
         )
 
-        setProgress(value = 1, message = "Visualización completada")
-        showNotification("Visualización 2D generada y guardada", type = "message", duration = 3)
+        setProgress(value = 1, message = tr("progress.visualizacion_completada"))
+        showNotification(tr("notifications.visualizacion_generada"), type = "message", duration = 3)
 
       }, error = function(e) {
         showNotification(paste("Error:", e$message), type = "error")
@@ -4886,10 +5231,10 @@ server <- function(input, output, session) {
       p <- ggplot(plot_data, aes(x = X, y = Y, color = Codigo, text = Extracto)) +
         geom_point(size = 3, alpha = 0.7) +
         labs(
-          title = paste("Visualización de Embeddings (", toupper(metodo), ")", sep = ""),
-          x = paste(toupper(metodo), "Dimensión 1"),
-          y = paste(toupper(metodo), "Dimensión 2"),
-          color = "Código"
+          title = tr("plots.visualizacion_embeddings", method = toupper(metodo)),
+          x = tr("plots.dimension_1", method = toupper(metodo)),
+          y = tr("plots.dimension_2", method = toupper(metodo)),
+          color = tr("plots.codigo_label")
         ) +
         theme_minimal(base_size = 12) +
         theme(
@@ -4913,11 +5258,11 @@ server <- function(input, output, session) {
   # Análisis de coherencia
   observeEvent(input$btn_coherencia, {
     if (is.null(rv$hf_similitud) || is.null(rv$datos_embedding_ref)) {
-      showNotification("Primero genera los embeddings", type = "error", duration = 3)
+      showNotification(tr("notifications.primero_genera_embeddings"), type = "error", duration = 3)
       return()
     }
 
-    withProgress(message = "Analizando coherencia...", value = 0.3, {
+    withProgress(message = tr("progress.analizando_coherencia"), value = 0.3, {
       tryCatch({
         coherencia <- analizar_coherencia_codigos(
           tabla = rv$datos_embedding_ref,
@@ -4927,7 +5272,7 @@ server <- function(input, output, session) {
         rv$semantico_coherencia <- coherencia
 
         showNotification(
-          paste("Análisis de coherencia completado para", nrow(coherencia), "códigos"),
+          tr("notifications.coherencia_completada", n = nrow(coherencia)),
           type = "message",
           duration = 4
         )
@@ -4940,22 +5285,30 @@ server <- function(input, output, session) {
 
   # Tabla de coherencia
   output$tabla_coherencia_semantico <- renderDT({
+    current_lang()
     req(rv$semantico_coherencia)
 
+    # Translate evaluation labels for display
+    eval_labels <- c("excellent" = tr("evaluacion.excelente"), "good" = tr("evaluacion.buena"),
+                      "moderate" = tr("evaluacion.moderada"), "low_review" = tr("evaluacion.baja_revisar"),
+                      "insufficient" = tr("evaluacion.insuficiente"))
+    display_data <- rv$semantico_coherencia %>%
+      mutate(Evaluacion = ifelse(Evaluacion %in% names(eval_labels), eval_labels[Evaluacion], Evaluacion))
+
     datatable(
-      rv$semantico_coherencia,
+      display_data,
       options = list(
         pageLength = 15,
         scrollX = TRUE,
-        language = list(search = "Buscar:")
+        language = list(search = tr("datatable.search"))
       ),
       rownames = FALSE,
-      colnames = c("Código", "N Fragmentos", "Coherencia Media", "Mín", "Máx", "SD", "Evaluación")
+      colnames = c(tr("colnames.codigo"), tr("colnames.n_fragmentos"), tr("colnames.coherencia_media"), tr("colnames.min"), tr("colnames.max"), tr("colnames.sd"), tr("colnames.evaluacion"))
     ) %>%
       formatStyle(
         "Evaluacion",
         backgroundColor = styleEqual(
-          c("Excelente", "Buena", "Moderada", "Baja - revisar", "Insuficiente (< 2 fragmentos)"),
+          c(tr("evaluacion.excelente"), tr("evaluacion.buena"), tr("evaluacion.moderada"), tr("evaluacion.baja_revisar"), tr("evaluacion.insuficiente")),
           c("#27ae60", "#2ecc71", "#f39c12", "#e74c3c", "#95a5a6")
         ),
         color = "white",
@@ -4976,21 +5329,23 @@ server <- function(input, output, session) {
       return(NULL)
     }
 
+    # Translate evaluation labels for display
+    eval_labels <- c("excellent" = tr("evaluacion.excelente"), "good" = tr("evaluacion.buena"),
+                      "moderate" = tr("evaluacion.moderada"), "low_review" = tr("evaluacion.baja_revisar"))
+    datos <- datos %>% mutate(Evaluacion = ifelse(Evaluacion %in% names(eval_labels), eval_labels[Evaluacion], Evaluacion))
+    eval_colors <- stats::setNames(c("#27ae60", "#2ecc71", "#f39c12", "#e74c3c"),
+                                   c(tr("evaluacion.excelente"), tr("evaluacion.buena"), tr("evaluacion.moderada"), tr("evaluacion.baja_revisar")))
+
     ggplot(datos, aes(x = reorder(Codigo, Coherencia_Media), y = Coherencia_Media, fill = Evaluacion)) +
       geom_col() +
       geom_errorbar(aes(ymin = Coherencia_Min, ymax = Coherencia_Max), width = 0.2, alpha = 0.7) +
       coord_flip() +
-      scale_fill_manual(values = c(
-        "Excelente" = "#27ae60",
-        "Buena" = "#2ecc71",
-        "Moderada" = "#f39c12",
-        "Baja - revisar" = "#e74c3c"
-      )) +
+      scale_fill_manual(values = eval_colors) +
       labs(
-        title = "Coherencia Semántica por Código",
-        x = "Código",
-        y = "Coherencia Media (similitud coseno)",
-        fill = "Evaluación"
+        title = tr("plots.coherencia_semantica"),
+        x = tr("plots.codigo_label"),
+        y = tr("plots.coherencia_media_label"),
+        fill = tr("plots.evaluacion_fill")
       ) +
       theme_minimal(base_size = 12) +
       theme(
@@ -5007,16 +5362,16 @@ server <- function(input, output, session) {
   # Generar red semántica
   observeEvent(input$btn_generar_red, {
     if (is.null(rv$hf_embeddings) || is.null(rv$datos_embedding_ref)) {
-      showNotification("Primero genera los embeddings", type = "error", duration = 3)
+      showNotification(tr("notifications.primero_genera_embeddings"), type = "error", duration = 3)
       return()
     }
 
     if (length(unique(rv$datos_embedding_ref$Codigo)) < 2) {
-      showNotification("Necesitas al menos 2 códigos diferentes", type = "error", duration = 3)
+      showNotification(tr("notifications.necesitas_2_codigos"), type = "error", duration = 3)
       return()
     }
 
-    withProgress(message = "Generando red semántica...", value = 0.3, {
+    withProgress(message = tr("progress.generando_red"), value = 0.3, {
       tryCatch({
         red <- calcular_red_semantica_codigos(
           embeddings_matrix = rv$hf_embeddings,
@@ -5026,10 +5381,10 @@ server <- function(input, output, session) {
 
         rv$red_semantica <- red
 
-        incProgress(0.7, detail = "Completado")
+        incProgress(0.7, detail = tr("progress.completado"))
 
         showNotification(
-          paste("Red generada:", red$n_codigos, "códigos,", red$n_conexiones, "conexiones"),
+          tr("notifications.red_generada", n_cod = red$n_codigos, n_con = red$n_conexiones),
           type = "message",
           duration = 4
         )
@@ -5042,6 +5397,7 @@ server <- function(input, output, session) {
 
   # Info de la red
   output$info_red_semantica <- renderUI({
+    current_lang()
     red <- rv$red_semantica
 
     if (is.null(red)) {
@@ -5049,8 +5405,8 @@ server <- function(input, output, session) {
         div(
           style = "text-align: center; padding: 20px; color: #7f8c8d;",
           icon("project-diagram", style = "font-size: 36px; margin-bottom: 10px;"),
-          h5("Red Semántica de Códigos"),
-          p("Configura el umbral y haz clic en 'Generar Red'")
+          h5(tr("red_semantica.titulo_red")),
+          p(tr("red_semantica.configura_umbral"))
         )
       )
     }
@@ -5061,19 +5417,19 @@ server <- function(input, output, session) {
         column(4,
           div(style = "text-align: center;",
             h4(red$n_codigos, style = "color: #2c3e50; margin: 0;"),
-            tags$small("Códigos", style = "color: #7f8c8d;")
+            tags$small(tr("red_semantica.codigos_label"), style = "color: #7f8c8d;")
           )
         ),
         column(4,
           div(style = "text-align: center;",
             h4(red$n_conexiones, style = "color: #3498db; margin: 0;"),
-            tags$small("Conexiones", style = "color: #7f8c8d;")
+            tags$small(tr("red_semantica.conexiones_label"), style = "color: #7f8c8d;")
           )
         ),
         column(4,
           div(style = "text-align: center;",
             h4(paste0(input$umbral_red_semantica * 100, "%"), style = "color: #27ae60; margin: 0;"),
-            tags$small("Umbral", style = "color: #7f8c8d;")
+            tags$small(tr("red_semantica.umbral_label"), style = "color: #7f8c8d;")
           )
         )
       )
@@ -5095,10 +5451,10 @@ server <- function(input, output, session) {
         tidygraph::activate(nodes) %>%
         tidygraph::mutate(comunidad = factor(comunidades$membership))
       color_var <- "comunidad"
-      color_title <- "Comunidad"
+      color_title <- tr("plots.comunidad")
     } else {
       color_var <- "categoria"
-      color_title <- "Categoría"
+      color_title <- tr("plots.categoria_fill")
     }
 
     # Crear el gráfico con ggraph
@@ -5124,8 +5480,8 @@ server <- function(input, output, session) {
       ggraph::scale_edge_width(range = c(0.5, 3)) +
       ggplot2::scale_size_continuous(range = c(5, 20), guide = "none") +
       ggplot2::labs(
-        title = "Red Semántica de Códigos",
-        subtitle = paste("Umbral de similitud:", input$umbral_red_semantica),
+        title = tr("plots.red_semantica_codigos"),
+        subtitle = tr("plots.umbral_similitud_subtitle", val = input$umbral_red_semantica),
         color = color_title
       ) +
       ggraph::theme_graph(base_family = "sans") +
@@ -5154,7 +5510,7 @@ server <- function(input, output, session) {
     # Validar API Key de OpenAI
     api_key <- input$openai_api_key
     if (is.null(api_key) || !nzchar(trimws(api_key))) {
-      showNotification("Ingresa tu API Key de OpenAI en la pestaña 'Análisis IA'", type = "error", duration = 4)
+      showNotification(tr("notifications.ingresa_api_key_pestana"), type = "error", duration = 4)
       return()
     }
 
@@ -5162,7 +5518,7 @@ server <- function(input, output, session) {
     ds <- datos_semantico()
 
     if (ds$n < 1) {
-      showNotification("No hay fragmentos para validar. Usa primero 'Análisis IA' o codifica manualmente.", type = "error", duration = 4)
+      showNotification(tr("notifications.no_fragmentos_validar"), type = "error", duration = 4)
       return()
     }
 
@@ -5173,25 +5529,26 @@ server <- function(input, output, session) {
     indices <- sample(1:ds$n, n_validar)
     muestra <- ds$datos[indices, ]
 
-    withProgress(message = "Validando con GPT-4.1...", value = 0.1, {
+    withProgress(message = tr("progress.validando_gpt"), value = 0.1, {
       tryCatch({
-        fuente_txt <- if (ds$fuente == "ia") "Análisis IA" else "codificación manual"
-        incProgress(0.2, detail = paste("Usando datos de", fuente_txt, "..."))
+        fuente_txt <- if (ds$fuente == "ia") tr("fuente.ia") else tr("fuente.manual")
+        incProgress(0.2, detail = tr("progress.usando_datos", source = fuente_txt))
 
-        incProgress(0.2, detail = "Conectando con OpenAI...")
+        incProgress(0.2, detail = tr("progress.conectando_openai"))
 
         resultado <- validar_codificacion_llm(
           fragmentos = muestra$Extracto,
           codigos = muestra$Codigo,
-          api_key = api_key
+          api_key = api_key,
+          lang = current_lang()
         )
 
         rv$semantico_validacion <- resultado
 
-        incProgress(0.5, detail = "Completado")
+        incProgress(0.5, detail = tr("progress.completado"))
 
         showNotification(
-          "Validación completada",
+          tr("notifications.validacion_completada"),
           type = "message",
           duration = 4
         )
@@ -5204,13 +5561,14 @@ server <- function(input, output, session) {
 
   # Resultado validación LLM
   output$resultado_validacion_llm <- renderUI({
+    current_lang()
     if (is.null(rv$semantico_validacion)) {
       return(
         div(
           style = "text-align: center; padding: 40px; color: #7f8c8d;",
           icon("robot", style = "font-size: 48px; margin-bottom: 15px;"),
-          h4("Panel de Expertos Virtual"),
-          p("Haz clic en 'Validar' para que un LLM evalúe la calidad de tu codificación")
+          h4(tr("validacion.panel_expertos")),
+          p(tr("validacion.haz_clic_validar"))
         )
       )
     }
@@ -5225,55 +5583,64 @@ server <- function(input, output, session) {
       "<h3 style='color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px; margin-top: 0;'>\\1</h3>\n"
     )
 
-    # Convertir headers de fragmento #### Fragmento N a tarjetas
+    # Convertir headers de fragmento #### Fragmento/Fragment N a tarjetas
     resultado <- stringr::str_replace_all(
       resultado,
-      "####\\s*(Fragmento\\s*\\d+)\\n",
+      "####\\s*((Fragmento|Fragment)\\s*\\d+)\\n",
       "</div><div class='fragment-card' style='background: white; border: 1px solid #e0e0e0; border-radius: 8px; padding: 15px; margin: 10px 0; box-shadow: 0 2px 4px rgba(0,0,0,0.05);'><h4 style='color: #3498db; margin: 0 0 10px 0; font-size: 14px;'><i class='fa fa-file-text-o'></i> \\1</h4>\n"
     )
 
-    # Convertir **Texto:** y otros labels bold
+    # Convertir **Texto:**/**Text:** y otros labels bold
+    texto_label <- tr("validacion.texto_label")
     resultado <- stringr::str_replace_all(
       resultado,
-      "\\*\\*Texto:\\*\\*\\s*\"(.+?)\"",
-      "<div style='background: #f8f9fa; padding: 10px; border-radius: 5px; margin: 5px 0; font-style: italic; border-left: 3px solid #95a5a6;'><strong>Texto:</strong> \"\\1\"</div>"
+      "\\*\\*(Texto|Text):\\*\\*\\s*\"(.+?)\"",
+      paste0("<div style='background: #f8f9fa; padding: 10px; border-radius: 5px; margin: 5px 0; font-style: italic; border-left: 3px solid #95a5a6;'><strong>", texto_label, "</strong> \"\\2\"</div>")
     )
 
+    codigo_display <- tr("validacion.codigo_label")
     resultado <- stringr::str_replace_all(
       resultado,
-      "\\*\\*Código Asignado:\\*\\*\\s*(.+?)\\n",
-      "<div style='margin: 5px 0;'><strong style='color: #7f8c8d;'>Código:</strong> <span style='background: #3498db; color: white; padding: 2px 8px; border-radius: 12px; font-size: 12px;'>\\1</span></div>\n"
+      "\\*\\*(Código Asignado|Assigned Code|Code):\\*\\*\\s*(.+?)\\n",
+      paste0("<div style='margin: 5px 0;'><strong style='color: #7f8c8d;'>", codigo_display, "</strong> <span style='background: #3498db; color: white; padding: 2px 8px; border-radius: 12px; font-size: 12px;'>\\2</span></div>\n")
     )
 
     # Convertir evaluaciones con colores
+    eval_label <- tr("validacion.evaluacion_label")
+    correcto_label <- tr("validacion.correcto")
+    revisar_label <- tr("validacion.revisar")
+    incorrecto_label <- tr("validacion.incorrecto")
+
     resultado <- stringr::str_replace_all(
       resultado,
-      "\\*\\*Evaluación:\\*\\*\\s*Correcto",
-      "<div style='margin: 8px 0;'><strong>Evaluación:</strong> <span style='background: #27ae60; color: white; padding: 3px 10px; border-radius: 12px; font-size: 12px;'>✓ Correcto</span></div>"
+      "\\*\\*(Evaluación|Evaluation):\\*\\*\\s*(Correcto|Correct)",
+      paste0("<div style='margin: 8px 0;'><strong>", eval_label, "</strong> <span style='background: #27ae60; color: white; padding: 3px 10px; border-radius: 12px; font-size: 12px;'>&#10003; ", correcto_label, "</span></div>")
     )
     resultado <- stringr::str_replace_all(
       resultado,
-      "\\*\\*Evaluación:\\*\\*\\s*Revisar",
-      "<div style='margin: 8px 0;'><strong>Evaluación:</strong> <span style='background: #f39c12; color: white; padding: 3px 10px; border-radius: 12px; font-size: 12px;'>⚠ Revisar</span></div>"
+      "\\*\\*(Evaluación|Evaluation):\\*\\*\\s*(Revisar|Review)",
+      paste0("<div style='margin: 8px 0;'><strong>", eval_label, "</strong> <span style='background: #f39c12; color: white; padding: 3px 10px; border-radius: 12px; font-size: 12px;'>&#9888; ", revisar_label, "</span></div>")
     )
     resultado <- stringr::str_replace_all(
       resultado,
-      "\\*\\*Evaluación:\\*\\*\\s*Incorrecto",
-      "<div style='margin: 8px 0;'><strong>Evaluación:</strong> <span style='background: #e74c3c; color: white; padding: 3px 10px; border-radius: 12px; font-size: 12px;'>✗ Incorrecto</span></div>"
+      "\\*\\*(Evaluación|Evaluation):\\*\\*\\s*(Incorrecto|Incorrect)",
+      paste0("<div style='margin: 8px 0;'><strong>", eval_label, "</strong> <span style='background: #e74c3c; color: white; padding: 3px 10px; border-radius: 12px; font-size: 12px;'>&#10007; ", incorrecto_label, "</span></div>")
     )
 
     # Convertir justificación
+    justif_label <- tr("validacion.justificacion_label")
     resultado <- stringr::str_replace_all(
       resultado,
-      "\\*\\*Justificación:\\*\\*\\s*(.+?)\\n",
-      "<div style='margin: 5px 0; color: #555;'><strong style='color: #7f8c8d;'>Justificación:</strong> \\1</div>\n"
+      "\\*\\*(Justificación|Justification):\\*\\*\\s*(.+?)\\n",
+      paste0("<div style='margin: 5px 0; color: #555;'><strong style='color: #7f8c8d;'>", justif_label, "</strong> \\2</div>\n")
     )
 
     # Convertir código alternativo
+    sugerencia_label <- tr("validacion.sugerencia_label")
     resultado <- stringr::str_replace_all(
       resultado,
-      "\\*\\*Código Alternativo( Sugerido)?:\\*\\*\\s*(.+?)\\n",
-      "<div style='margin: 5px 0;'><strong style='color: #7f8c8d;'>Sugerencia:</strong> <em>\\2</em></div>\n"
+      "\\*\\*(Código Alternativo( Sugerido)?|Suggested Alternative Code|Alternative Code):\\*\\*\\s*(.+?)\\n",
+      paste0("<div style='margin: 5px 0;'><strong style='color: #7f8c8d;'>", sugerencia_label, "</strong> <em>\\3</em></div>\n")
     )
 
     # Limpiar números de lista (1., 2., 3.)
@@ -5291,7 +5658,7 @@ server <- function(input, output, session) {
     resultado <- stringr::str_replace(resultado, "^</div>", "")
 
     div(
-      h4(icon("gavel"), " Resultado de la Validación", style = "color: #2c3e50; margin-bottom: 15px;"),
+      h4(icon("gavel"), paste0(" ", tr("validacion.resultado_validacion")), style = "color: #2c3e50; margin-bottom: 15px;"),
       div(
         style = "background: #f0f3f5; padding: 20px; border-radius: 10px; max-height: 500px; overflow-y: auto;",
         HTML(resultado)
@@ -5695,14 +6062,14 @@ server <- function(input, output, session) {
     # Validar API Key de OpenAI
     api_key <- input$openai_api_key
     if (is.null(api_key) || !nzchar(trimws(api_key))) {
-      showNotification("Ingresa tu API Key de OpenAI en la pestaña 'Análisis IA'", type = "error", duration = 4)
+      showNotification(tr("notifications.ingresa_api_key_pestana"), type = "error", duration = 4)
       return()
     }
 
     # Validar que hay datos
     ds <- datos_semantico()
     if (ds$n < 1) {
-      showNotification("No hay fragmentos codificados. Realiza primero un análisis.", type = "error", duration = 4)
+      showNotification(tr("notifications.no_fragmentos_codificados"), type = "error", duration = 4)
       return()
     }
 
@@ -5717,30 +6084,30 @@ server <- function(input, output, session) {
       secciones = input$secciones_reporte
     )
 
-    withProgress(message = "Generando reporte con GPT-4.1...", value = 0.1, {
-      incProgress(0.2, detail = "Conectando con OpenAI...")
+    withProgress(message = tr("progress.generando_reporte"), value = 0.1, {
+      incProgress(0.2, detail = tr("progress.conectando_openai"))
 
       resultado <- tryCatch({
         call_openai_api(
           prompt = prompt,
           api_key = api_key,
-          system_prompt = "Eres un experto en análisis cualitativo de datos textuales y redacción académica."
+          system_prompt = if(input$idioma_reporte == "es") "Eres un experto en an\u00e1lisis cualitativo de datos textuales y redacci\u00f3n acad\u00e9mica." else "You are an expert in qualitative textual data analysis and academic writing."
         )
       }, error = function(e) {
         showNotification(
-          paste("Error OpenAI:", e$message),
+          paste0("Error OpenAI: ", e$message),
           type = "error",
           duration = 6
         )
         NULL
       })
 
-      incProgress(0.5, detail = "Procesando respuesta...")
+      incProgress(0.5, detail = tr("progress.procesando_respuesta"))
 
       # Verificar resultado
       if (is.null(resultado) || !nzchar(resultado)) {
         showNotification(
-          "No se pudo generar el reporte. Verifica tu API Key.",
+          tr("notifications.no_generar_reporte"),
           type = "error",
           duration = 6
         )
@@ -5750,14 +6117,15 @@ server <- function(input, output, session) {
       # Guardar resultado
       rv_reporte(resultado)
 
-      incProgress(0.2, detail = "Completado")
+      incProgress(0.2, detail = tr("progress.completado"))
 
-      showNotification("Reporte generado exitosamente", type = "message", duration = 4)
+      showNotification(tr("notifications.reporte_generado"), type = "message", duration = 4)
     })
   })
 
   # Output del reporte
   output$reporte_ia_output <- renderUI({
+    current_lang()
     reporte <- rv_reporte()
 
     if (is.null(reporte)) {
@@ -5765,9 +6133,9 @@ server <- function(input, output, session) {
         div(
           style = "text-align: center; padding: 60px; color: #7f8c8d;",
           icon("file-alt", style = "font-size: 64px; margin-bottom: 20px;"),
-          h4("Reporte con IA"),
-          p("Configura las opciones y haz clic en 'Generar Reporte'"),
-          p("El reporte se generará automáticamente basándose en tus análisis.",
+          h4(tr("reporte.reporte_ia_titulo")),
+          p(tr("reporte.reporte_ia_desc")),
+          p(tr("reporte.reporte_ia_auto"),
             style = "font-size: 13px;")
         )
       )
@@ -5784,7 +6152,7 @@ server <- function(input, output, session) {
       div(
         style = "margin-bottom: 15px; padding: 10px; background: #d4edda; border-radius: 5px; border-left: 4px solid #28a745;",
         icon("check-circle", style = "color: #28a745;"),
-        tags$span(" Reporte generado exitosamente", style = "color: #155724; font-weight: 500;")
+        tags$span(paste0(" ", tr("notifications.reporte_generado")), style = "color: #155724; font-weight: 500;")
       ),
       div(
         style = "background: #ffffff; padding: 25px; border-radius: 10px; border: 1px solid #e0e4e8; max-height: 600px; overflow-y: auto; line-height: 1.8; text-align: justify;",
@@ -5796,7 +6164,7 @@ server <- function(input, output, session) {
   # Descarga del reporte en Word
   output$btn_descargar_reporte <- downloadHandler(
     filename = function() {
-      paste0("Reporte_Cualitativo_", Sys.Date(), ".docx")
+      paste0(if (current_lang() == "es") "Reporte_Cualitativo_" else "Qualitative_Report_", Sys.Date(), ".docx")
     },
     content = function(file) {
       reporte <- rv_reporte()
@@ -5807,8 +6175,8 @@ server <- function(input, output, session) {
 
         # Título
         doc <- doc %>%
-          officer::body_add_par("Reporte de Análisis Cualitativo", style = "heading 1") %>%
-          officer::body_add_par(paste("Generado:", format(Sys.time(), "%d/%m/%Y %H:%M")), style = "Normal") %>%
+          officer::body_add_par(if(current_lang() == "es") "Reporte de An\u00e1lisis Cualitativo" else "Qualitative Analysis Report", style = "heading 1") %>%
+          officer::body_add_par(paste(if(current_lang() == "es") "Generado:" else "Generated:", format(Sys.time(), "%d/%m/%Y %H:%M")), style = "Normal") %>%
           officer::body_add_par("", style = "Normal")
 
         # Procesar el contenido del reporte
@@ -5846,7 +6214,7 @@ server <- function(input, output, session) {
           linea_trim <- trimws(linea)
 
           # Detectar etiquetas de figura [Insertar Figura...]
-          if (grepl("^\\[Insertar\\s+Figura", linea_trim, ignore.case = TRUE)) {
+          if (grepl("^\\[(Insertar\\s+Figura|Insert\\s+.*Figure)", linea_trim, ignore.case = TRUE)) {
             # Primero procesar el buffer acumulado
             doc <- procesar_buffer(doc, buffer_parrafo)
             buffer_parrafo <- c()
@@ -5875,17 +6243,17 @@ server <- function(input, output, session) {
         doc <- doc %>%
           officer::body_add_par("", style = "Normal") %>%
           officer::body_add_par("---", style = "Normal") %>%
-          officer::body_add_par("Generado con RCualiText v2.4 - Análisis Cualitativo con IA", style = "Normal")
+          officer::body_add_par(if(current_lang() == "es") "Generado con RCualiText v2.4 - An\u00e1lisis Cualitativo con IA" else "Generated with RCualiText v2.4 - Qualitative Analysis with AI", style = "Normal")
 
         # Guardar documento
         print(doc, target = file)
 
-        showNotification("Reporte Word descargado", type = "message", duration = 3)
+        showNotification(tr("notifications.reporte_word_descargado"), type = "message", duration = 3)
       } else {
         # Si no hay reporte, crear documento vacío con mensaje
         doc <- officer::read_docx() %>%
-          officer::body_add_par("No hay reporte generado", style = "Normal") %>%
-          officer::body_add_par("Por favor, genera un reporte primero usando el botón 'Generar Reporte'.", style = "Normal")
+          officer::body_add_par(tr("notifications.no_hay_reporte"), style = "Normal") %>%
+          officer::body_add_par(tr("notifications.genera_reporte_primero"), style = "Normal")
         print(doc, target = file)
       }
     }
