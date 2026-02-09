@@ -25,9 +25,47 @@ library(plotly)
 library(httr)
 library(jsonlite)
 library(readxl)
+library(googlesheets4)
 # para análisis semántico
 library(digest)  # Para cache hash
 options(shiny.maxRequestSize = 50 * 1024^2)
+
+# ========================================
+# Configuración de registro de usuarios (Google Sheets)
+# ========================================
+google_sheets_id <- "16Zz3wYL-OZ7r2y5sfxz-rgA1mF3MT37yavZgnLaZM7Y"
+google_credentials_json <- "personal-2025-470111-36843658e199.json"
+
+# Autenticación con service account
+tryCatch({
+  googlesheets4::gs4_auth(path = google_credentials_json)
+  message("Google Sheets autenticado correctamente")
+}, error = function(e) {
+  message("Error autenticando Google Sheets: ", e[["message"]])
+  googlesheets4::gs4_deauth()
+})
+
+# Función para guardar registro de usuario en Google Sheets
+guardar_registro <- function(nombre, correo, universidad, residencia) {
+  nueva_fila <- data.frame(
+    fecha_hora = format(Sys.time(), "%Y-%m-%d %H:%M:%S"),
+    nombre = nombre,
+    correo = correo,
+    universidad = universidad,
+    residencia = residencia,
+    stringsAsFactors = FALSE
+  )
+  tryCatch({
+    googlesheets4::sheet_append(google_sheets_id, nueva_fila, sheet = 1)
+    message("Registro guardado en Google Sheets: ", correo)
+    TRUE
+  }, error = function(e) {
+    message("Error guardando en Google Sheets: ", e[["message"]])
+    message("Datos del registro - Nombre: ", nombre, ", Correo: ", correo,
+            ", Universidad: ", universidad, ", Residencia: ", residencia)
+    FALSE
+  })
+}
 
 # Asegurar que pipe viene de magrittr/dplyr
 `%>%` <- magrittr::`%>%`
@@ -1333,6 +1371,20 @@ translations <- jsonlite::fromJSON(r"--(
     "fuente": {
       "ia": "AI Analysis",
       "manual": "manual coding"
+    },
+    "login": {
+      "titulo": "Welcome to RCualiText",
+      "subtitulo": "Qualitative Text Analysis Tool",
+      "descripcion": "Please enter your details to continue",
+      "nombre": "Full Name",
+      "correo": "Email",
+      "universidad": "University / Institution",
+      "residencia": "Place of Residence",
+      "boton": "Enter Application",
+      "error_nombre": "Please enter your full name",
+      "error_correo": "Please enter a valid email",
+      "error_universidad": "Please enter your university or institution",
+      "error_residencia": "Please enter your place of residence"
     }
   },
   "es": {
@@ -1845,6 +1897,20 @@ translations <- jsonlite::fromJSON(r"--(
     "fuente": {
       "ia": "An\u00e1lisis IA",
       "manual": "codificaci\u00f3n manual"
+    },
+    "login": {
+      "titulo": "Bienvenido a RCualiText",
+      "subtitulo": "Herramienta de An\u00e1lisis Cualitativo de Texto",
+      "descripcion": "Por favor, ingrese sus datos para continuar",
+      "nombre": "Nombre Completo",
+      "correo": "Correo Electr\u00f3nico",
+      "universidad": "Universidad / Instituci\u00f3n",
+      "residencia": "Lugar de Residencia",
+      "boton": "Ingresar a la Aplicaci\u00f3n",
+      "error_nombre": "Por favor ingrese su nombre completo",
+      "error_correo": "Por favor ingrese un correo v\u00e1lido",
+      "error_universidad": "Por favor ingrese su universidad o instituci\u00f3n",
+      "error_residencia": "Por favor ingrese su lugar de residencia"
     }
   }
 }
@@ -1884,6 +1950,12 @@ ui <- dashboardPage(
       info = "#2980b9"
     ),
     useShinyjs(),
+    # ===== Login overlay (covers entire viewport until registration) =====
+    div(
+      id = "login_overlay",
+      style = "position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 9999; background: linear-gradient(135deg, #2c3e50 0%, #34495e 50%, #2c3e50 100%); display: flex; align-items: center; justify-content: center; font-family: 'Source Sans Pro', sans-serif; padding: 20px;",
+      uiOutput("login_form_ui")
+    ),
     tags$head(
       tags$link(href = "https://fonts.googleapis.com/css2?family=Source+Sans+Pro:wght@300;400;600;700&family=Source+Serif+Pro:wght@400;600;700&display=swap", rel = "stylesheet"),
       tags$style(HTML("
@@ -3630,6 +3702,11 @@ server <- function(input, output, session) {
     current_lang(if (input$lang_toggle) "es" else "en")
   })
 
+  # Also handle login language toggle
+  observeEvent(input$login_lang_toggle, {
+    current_lang(if (input$login_lang_toggle) "es" else "en")
+  })
+
   tr <- function(key, ...) {
     lang <- current_lang()
     parts <- strsplit(key, "\\.")[[1]]
@@ -3641,6 +3718,154 @@ server <- function(input, output, session) {
     }
     val
   }
+
+  # ========================================
+  # Registration / Login system
+  # ========================================
+  error_registro <- reactiveVal("")
+
+  output$login_form_ui <- renderUI({
+    current_lang()  # Trigger re-render on language change
+    tagList(
+      # Language toggle in top-right corner
+      div(
+        style = "position: fixed; top: 20px; right: 20px; z-index: 10000; background: rgba(255,255,255,0.15); padding: 8px 16px; border-radius: 20px; backdrop-filter: blur(10px);",
+        materialSwitch(inputId = "login_lang_toggle", label = "EN/ES", value = (current_lang() == "es"), status = "primary"),
+        tags$style(HTML("
+          #login_lang_toggle ~ .bootstrap-switch .bootstrap-switch-label { background: rgba(255,255,255,0.3) !important; }
+        "))
+      ),
+
+      # Main card
+      div(
+        style = "background: #ffffff; border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); max-width: 480px; width: 100%; padding: 0; overflow: hidden;",
+
+        # Header
+        div(
+          style = "background: linear-gradient(135deg, #2980b9, #3498db); padding: 35px 40px; text-align: center;",
+          tags$i(class = "fa fa-microscope", style = "font-size: 48px; color: #fff; margin-bottom: 12px; display: block;"),
+          h2(tr("login.titulo"), style = "color: #fff; margin: 0 0 8px 0; font-weight: 700; font-size: 26px;"),
+          p(tr("login.subtitulo"), style = "color: rgba(255,255,255,0.85); margin: 0 0 4px 0; font-size: 14px; font-weight: 300;"),
+          p(tr("login.descripcion"), style = "color: rgba(255,255,255,0.7); margin: 0; font-size: 13px; font-weight: 300;")
+        ),
+
+        # Form body
+        div(
+          style = "padding: 35px 40px;",
+
+          tags$style(HTML("
+            .login-field .form-group { margin-bottom: 20px; }
+            .login-field .form-control {
+              border: 2px solid #e0e6ed;
+              border-radius: 8px;
+              padding: 12px 15px;
+              font-size: 14px;
+              transition: border-color 0.3s, box-shadow 0.3s;
+              background: #f8f9fa;
+            }
+            .login-field .form-control:focus {
+              border-color: #2980b9;
+              box-shadow: 0 0 0 3px rgba(41,128,185,0.15);
+              background: #fff;
+            }
+            .login-field label {
+              font-weight: 600;
+              color: #2c3e50;
+              font-size: 13px;
+              margin-bottom: 6px;
+            }
+            .btn-registro {
+              background: linear-gradient(135deg, #2980b9, #3498db);
+              border: none;
+              color: #fff;
+              padding: 14px;
+              font-size: 16px;
+              font-weight: 600;
+              border-radius: 8px;
+              width: 100%;
+              cursor: pointer;
+              transition: transform 0.2s, box-shadow 0.2s;
+              margin-top: 10px;
+            }
+            .btn-registro:hover {
+              transform: translateY(-2px);
+              box-shadow: 0 8px 25px rgba(41,128,185,0.4);
+            }
+            .error-msg {
+              color: #c0392b;
+              background: #fdeaea;
+              padding: 10px 15px;
+              border-radius: 6px;
+              font-size: 13px;
+              margin-bottom: 15px;
+              border-left: 3px solid #c0392b;
+            }
+          ")),
+
+          # Error message
+          conditionalPanel(
+            condition = "output.show_registro_error",
+            div(class = "error-msg", textOutput("registro_error_text"))
+          ),
+
+          div(class = "login-field",
+            textInput("reg_nombre", tr("login.nombre"), placeholder = tr("login.nombre")),
+            textInput("reg_correo", tr("login.correo"), placeholder = "example@university.edu"),
+            textInput("reg_universidad", tr("login.universidad"), placeholder = tr("login.universidad")),
+            textInput("reg_residencia", tr("login.residencia"), placeholder = tr("login.residencia"))
+          ),
+
+          actionButton("btn_registro", tr("login.boton"), class = "btn-registro",
+                       icon = icon("sign-in-alt"))
+        ),
+
+        # Footer
+        div(
+          style = "padding: 15px 40px; background: #f8f9fa; text-align: center; border-top: 1px solid #e0e6ed;",
+          p(style = "margin: 0; color: #95a5a6; font-size: 12px;",
+            "Dr. Jos\u00e9 Ventura-Le\u00f3n | RCualiText v1.0")
+        )
+      )
+    )
+  })
+
+  # Error display helpers
+  output$show_registro_error <- reactive({ nchar(error_registro()) > 0 })
+  outputOptions(output, "show_registro_error", suspendWhenHidden = FALSE)
+  output$registro_error_text <- renderText({ error_registro() })
+
+  # Registration button handler
+  observeEvent(input$btn_registro, {
+    nombre <- trimws(input$reg_nombre %||% "")
+    correo <- trimws(input$reg_correo %||% "")
+    universidad <- trimws(input$reg_universidad %||% "")
+    residencia <- trimws(input$reg_residencia %||% "")
+
+    # Validations
+    if (nchar(nombre) == 0) {
+      error_registro(tr("login.error_nombre"))
+      return()
+    }
+    if (!grepl("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$", correo)) {
+      error_registro(tr("login.error_correo"))
+      return()
+    }
+    if (nchar(universidad) == 0) {
+      error_registro(tr("login.error_universidad"))
+      return()
+    }
+    if (nchar(residencia) == 0) {
+      error_registro(tr("login.error_residencia"))
+      return()
+    }
+
+    # Save registration
+    guardar_registro(nombre, correo, universidad, residencia)
+
+    # Clear error and hide login overlay
+    error_registro("")
+    shinyjs::hide("login_overlay")
+  })
 
   dt_language <- function() {
     list(
