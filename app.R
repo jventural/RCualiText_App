@@ -13,7 +13,6 @@ library(DT)
 library(openxlsx)
 library(bslib)
 library(shinycssloaders)
-library(shinyWidgets)
 # para análisis y visualización
 library(tidyverse)
 library(igraph)
@@ -31,6 +30,14 @@ library(digest)  # Para cache hash
 options(shiny.maxRequestSize = 50 * 1024^2)
 
 # ========================================
+# Source modularized files
+# ========================================
+source("R/utils.R")
+source("R/api.R")
+source("R/analysis.R")
+source("R/plots.R")
+
+# ========================================
 # Configuración de registro de usuarios (Google Sheets)
 # ========================================
 google_sheets_id <- "16Zz3wYL-OZ7r2y5sfxz-rgA1mF3MT37yavZgnLaZM7Y"
@@ -46,13 +53,11 @@ tryCatch({
 })
 
 # Función para guardar registro de usuario en Google Sheets
-guardar_registro <- function(nombre, correo, universidad, residencia) {
+guardar_registro <- function(nombre, correo) {
   nueva_fila <- data.frame(
     fecha_hora = format(Sys.time(), "%Y-%m-%d %H:%M:%S"),
     nombre = nombre,
     correo = correo,
-    universidad = universidad,
-    residencia = residencia,
     stringsAsFactors = FALSE
   )
   tryCatch({
@@ -61,8 +66,7 @@ guardar_registro <- function(nombre, correo, universidad, residencia) {
     TRUE
   }, error = function(e) {
     message("Error guardando en Google Sheets: ", e[["message"]])
-    message("Datos del registro - Nombre: ", nombre, ", Correo: ", correo,
-            ", Universidad: ", universidad, ", Residencia: ", residencia)
+    message("Datos del registro - Nombre: ", nombre, ", Correo: ", correo)
     FALSE
   })
 }
@@ -71,790 +75,9 @@ guardar_registro <- function(nombre, correo, universidad, residencia) {
 `%>%` <- magrittr::`%>%`
 
 # ========================================
-# Función para leer archivos (.txt, .docx)
-# ========================================
-leer_archivo <- function(archivo) {
-  ext <- tools::file_ext(archivo$datapath)
-  if (ext == "txt") {
-    lineas <- readLines(archivo$datapath, encoding = "UTF-8")
-    # Eliminar líneas vacías del inicio y final, mantener las internas
-    lineas_limpias <- lineas[lineas != ""]
-    texto_final <- paste(lineas_limpias, collapse = "\n")
-    # Limpiar espacios al inicio y final
-    str_trim(texto_final)
-  } else if (ext %in% c("docx","doc")) {
-    doc <- read_docx(archivo$datapath)
-    df  <- docx_summary(doc)
-    df  <- df[!is.na(df$text) & df$text != "", ]
-    df  <- df[!duplicated(df$text), ]
-    texto_final <- paste(df$text, collapse = "\n")
-    # Limpiar espacios al inicio y final
-    str_trim(texto_final)
-  } else {
-    "Format not supported"
-  }
-}
-
-# ========================================
-# Funciones auxiliares para resaltado múltiple
+# Functions now sourced from R/utils.R, R/api.R, R/analysis.R, R/plots.R
 # ========================================
 
-# Función para crear un ID único para cada fragmento
-crear_fragment_id <- function() {
-  paste0("fragment_", as.integer(Sys.time()), "_", sample(1000:9999, 1))
-}
-
-# Función para generar CSS de resaltado múltiple
-generar_css_multiples <- function(colores) {
-  if (length(colores) == 1) {
-    return(paste0("background-color: ", colores[1], "; box-shadow: 0 2px 8px rgba(0,0,0,0.15);"))
-  }
-  
-  # Para múltiples colores, crear un gradiente lineal con franjas
-  n_colores <- length(colores)
-  porcentaje <- 100 / n_colores
-  
-  stops <- character()
-  for (i in seq_along(colores)) {
-    inicio <- (i - 1) * porcentaje
-    fin <- i * porcentaje
-    stops <- c(stops, paste0(colores[i], " ", inicio, "% ", fin, "%"))
-  }
-  
-  gradient <- paste0("linear-gradient(135deg, ", paste(stops, collapse = ", "), ")")
-  return(paste0("background: ", gradient, "; box-shadow: 0 3px 12px rgba(0,0,0,0.2); border-radius: 6px;"))
-}
-
-# Función para aplicar resaltado múltiple al texto
-aplicar_resaltado_multiple <- function(texto_original, fragmentos_df, codes_label = "Codes") {
-  if (nrow(fragmentos_df) == 0) return(texto_original)
-  
-  texto_procesado <- texto_original
-  
-  # Agrupar fragmentos por texto exacto
-  fragmentos_agrupados <- fragmentos_df %>%
-    group_by(Extracto, Archivo) %>%
-    summarise(
-      Codigos = list(Codigo),
-      Colores = list(Color),
-      FragmentId = first(FragmentId),
-      .groups = "drop"
-    )
-  
-  # Aplicar cada grupo de fragmentos
-  for (i in seq_len(nrow(fragmentos_agrupados))) {
-    frag <- fragmentos_agrupados[i, ]
-    texto_buscar <- frag$Extracto
-    colores <- unlist(frag$Colores)
-    fragment_id <- frag$FragmentId
-    codigos_aplicados <- paste(unlist(frag$Codigos), collapse = ", ")
-    
-    # Generar CSS para múltiples colores
-    css_style <- generar_css_multiples(colores)
-    
-    # Crear el span con el resaltado y tooltip
-    span_text <- paste0(
-      "<span class='highlight-multiple' data-fragment-id='", fragment_id, "' ",
-      "title='", codes_label, ": ", codigos_aplicados, "' ",
-      "style='", css_style, " padding: 4px 8px; margin: 2px; color: #fff; font-weight: 500; text-shadow: 1px 1px 2px rgba(0,0,0,0.3);'>",
-      texto_buscar,
-      "</span>"
-    )
-    
-    # Reemplazar solo si el texto no está ya resaltado
-    if (!grepl(paste0("data-fragment-id='", fragment_id, "'"), texto_procesado)) {
-      texto_procesado <- sub(texto_buscar, span_text, texto_procesado, fixed = TRUE)
-    }
-  }
-  
-  return(texto_procesado)
-}
-
-# ========================================
-# Funciones de análisis y visualización (versiones optimizadas)
-# ========================================
-plot_codigos <- function(df, fill = TRUE, code_colors = NULL, labels = list(freq = "Frequency", codes = "Codes", cat = "Category")) {
-  # Limpiar datos de categorías vacías o NA
-  sin_cat_label <- if (!is.null(labels$sin_cat)) labels$sin_cat else "Uncategorized"
-  df <- df %>%
-    mutate(Categoria = case_when(
-      is.na(Categoria) | Categoria == "" ~ sin_cat_label,
-      TRUE ~ Categoria
-    ))
-
-  # Pre-calcular conteos
-  if (fill && "Categoria" %in% names(df)) {
-    df_counts <- df %>%
-      count(Archivo, Codigo, Categoria, name = "Frecuencia") %>%
-      group_by(Archivo) %>%
-      mutate(Codigo = factor(Codigo, levels = Codigo[order(Frecuencia)])) %>%
-      ungroup()
-  } else {
-    df_counts <- df %>%
-      count(Archivo, Codigo, name = "Frecuencia") %>%
-      group_by(Archivo) %>%
-      mutate(Codigo = factor(Codigo, levels = Codigo[order(Frecuencia)])) %>%
-      ungroup()
-  }
-
-  # Usar plotly nativo con textposition = "outside"
-  if (fill && "Categoria" %in% names(df_counts)) {
-    p <- plotly::plot_ly(
-      data = df_counts,
-      y = ~Codigo,
-      x = ~Frecuencia,
-      color = ~Categoria,
-      type = "bar",
-      orientation = "h",
-      text = ~Frecuencia,
-      textposition = "outside",
-      textfont = list(size = 12, color = "#2c3e50", family = "Arial Black"),
-      hovertemplate = paste0("<b>%{y}</b><br>", labels$freq, ": %{x}<extra></extra>")
-    )
-  } else {
-    # Aplicar colores personalizados si existen
-    if (!is.null(code_colors)) {
-      df_counts <- df_counts %>%
-        mutate(Color = code_colors[as.character(Codigo)])
-
-      p <- plotly::plot_ly(
-        data = df_counts,
-        y = ~Codigo,
-        x = ~Frecuencia,
-        type = "bar",
-        orientation = "h",
-        text = ~Frecuencia,
-        textposition = "outside",
-        textfont = list(size = 12, color = "#2c3e50", family = "Arial Black"),
-        marker = list(color = ~Color),
-        hovertemplate = paste0("<b>%{y}</b><br>", labels$freq, ": %{x}<extra></extra>")
-      )
-    } else {
-      p <- plotly::plot_ly(
-        data = df_counts,
-        y = ~Codigo,
-        x = ~Frecuencia,
-        color = ~Codigo,
-        type = "bar",
-        orientation = "h",
-        text = ~Frecuencia,
-        textposition = "outside",
-        textfont = list(size = 12, color = "#2c3e50", family = "Arial Black"),
-        hovertemplate = paste0("<b>%{y}</b><br>", labels$freq, ": %{x}<extra></extra>")
-      )
-    }
-  }
-
-  # Layout común
-  p <- p %>%
-    plotly::layout(
-      xaxis = list(
-        title = list(text = labels$freq, font = list(size = 12, family = "sans-serif")),
-        tickfont = list(size = 10)
-      ),
-      yaxis = list(
-        title = list(text = labels$codes, font = list(size = 12, family = "sans-serif")),
-        tickfont = list(size = 10),
-        categoryorder = "total ascending"
-      ),
-      legend = list(
-        orientation = "h",
-        x = 0.5,
-        xanchor = "center",
-        y = -0.15,
-        font = list(size = 10)
-      ),
-      margin = list(l = 120, r = 80, t = 40, b = 80),
-      barmode = "stack",
-      plot_bgcolor = "rgba(0,0,0,0)",
-      paper_bgcolor = "rgba(0,0,0,0)"
-    ) %>%
-    plotly::config(displayModeBar = FALSE)
-
-  return(p)
-}
-
-# Función ggplot para descarga JPG (mantener para exportación estática)
-plot_codigos_ggplot <- function(df, fill = TRUE, code_colors = NULL, labels = list(freq = "Frequency", codes = "Codes", cat = "Category", code = "Code")) {
-  sin_cat_label <- if (!is.null(labels$sin_cat)) labels$sin_cat else "Uncategorized"
-  df <- df %>%
-    mutate(Categoria = case_when(
-      is.na(Categoria) | Categoria == "" ~ sin_cat_label,
-      TRUE ~ Categoria
-    ))
-
-  if (fill && "Categoria" %in% names(df)) {
-    df_counts <- df %>%
-      count(Archivo, Codigo, Categoria, name = "Frecuencia") %>%
-      group_by(Archivo) %>%
-      mutate(Codigo = factor(Codigo, levels = Codigo[order(Frecuencia)])) %>%
-      ungroup()
-
-    p <- ggplot(df_counts, aes(x = Codigo, y = Frecuencia, fill = Categoria)) +
-      geom_col() +
-      geom_text(aes(label = Frecuencia), hjust = -0.3, size = 4, fontface = "bold", color = "#2c3e50") +
-      facet_wrap(~ Archivo, scales = "free_y") +
-      coord_flip() +
-      labs(x = labels$codes, y = labels$freq, fill = labels$cat)
-  } else {
-    df_counts <- df %>%
-      count(Archivo, Codigo, name = "Frecuencia") %>%
-      group_by(Archivo) %>%
-      mutate(Codigo = factor(Codigo, levels = Codigo[order(Frecuencia)])) %>%
-      ungroup()
-
-    p <- ggplot(df_counts, aes(x = Codigo, y = Frecuencia, fill = Codigo)) +
-      geom_col() +
-      geom_text(aes(label = Frecuencia), hjust = -0.3, size = 4, fontface = "bold", color = "#2c3e50") +
-      facet_wrap(~ Archivo, scales = "free_y") +
-      coord_flip() +
-      labs(x = labels$codes, y = labels$freq, fill = labels$code)
-  }
-
-  p <- p +
-    theme_minimal(base_size = 12, base_family = "sans") +
-    theme(
-      legend.position = "bottom",
-      legend.direction = "horizontal",
-      legend.title = element_text(size = 11, face = "bold"),
-      legend.text = element_text(size = 10),
-      strip.text = element_text(size = 11, face = "bold"),
-      axis.text = element_text(size = 10),
-      axis.title = element_text(size = 11, face = "bold")
-    ) +
-    scale_y_continuous(expand = expansion(mult = c(0, 0.25))) +
-    guides(fill = guide_legend(nrow = 2, byrow = TRUE))
-
-  if (!fill && !is.null(code_colors)) {
-    p <- p + scale_fill_manual(values = code_colors)
-  }
-  p
-}
-
-plot_network_and_centrality <- function(df, code_colors = NULL, labels = list(code = "Code", centrality = "Centrality (z-score)")) {
-  dtm <- df %>%
-    count(Archivo, Codigo, name="freq") %>%
-    pivot_wider(names_from=Codigo, values_from=freq, values_fill=0)
-  mat <- dtm %>% select(-Archivo) %>% as.matrix() %>% crossprod()
-  
-  graph_tbl <- mat %>%
-    graph_from_adjacency_matrix(weighted=TRUE) %>%
-    as_tbl_graph() %>%
-    activate(nodes) %>%
-    mutate(
-      full_name   = name,
-      label_abbr  = substr(name,1,3),
-      strength    = centrality_degree(weights=weight),
-      closeness   = centrality_closeness(),
-      betweenness = centrality_betweenness()
-    )
-  
-  # Establecer semilla aleatoria fija para layout consistente
-  set.seed(2026)
-  
-  # Configurar plot de red - optimizado para descarga
-  net_plot <- ggraph(graph_tbl, layout="fr") +
-    geom_edge_link(aes(width=weight), color="gray80", alpha=0.6) +
-    scale_edge_width(range = c(0.5, 3), guide = "none") +
-    geom_node_point(aes(fill=full_name), shape=21, size=12, color="white") +
-    { if (!is.null(code_colors))
-      scale_fill_manual(name=labels$code, values=code_colors)
-      else
-        scale_fill_brewer(name=labels$code, palette="Set3") } +
-    geom_node_text(aes(label=label_abbr), size=3.5) +
-    guides(fill = guide_legend(
-      nrow = 2,
-      byrow = TRUE,
-      title.position = "top",
-      title.hjust = 0.5
-    )) +
-    theme_void(base_size = 11) +
-    theme(
-      legend.title = element_text(size = 10, face = "bold"),
-      legend.text = element_text(size = 9)
-    )
-  
-  cents <- graph_tbl %>%
-    as_tibble() %>%
-    select(full_name, strength) %>%
-    pivot_longer(cols = -full_name, names_to = "metric", values_to = "value") %>%
-    group_by(metric) %>%
-    mutate(zscore = round((value - mean(value)) / sd(value), 2)) %>%
-    ungroup()
-  
-  # Plot de centralidad - optimizado para descarga
-  cent_plot <- cents %>%
-    filter(metric == "strength") %>%
-    ggplot(aes(full_name, zscore, group = metric)) +
-    geom_line(color = "gray40", linewidth = 1) +
-    geom_point(aes(fill = full_name), shape = 21, size = 5, color = "white", stroke = 1.5) +
-    { if (!is.null(code_colors))
-      scale_fill_manual(values = code_colors, guide = "none")
-      else
-        scale_fill_brewer(palette = "Set3", guide = "none") } +
-    coord_flip() +
-    labs(y = labels$centrality, x = labels$code) +
-    theme_bw(base_size = 10) +
-    theme(
-      axis.text.y = element_text(size = 9),
-      axis.text.x = element_text(size = 9),
-      axis.title = element_text(size = 10, face = "bold")
-    ) +
-    geom_hline(yintercept = 0, linetype = "dashed", color = "gray50", linewidth = 0.7)
-  
-  # Combinar plots con leyenda compartida en la parte inferior centrada
-  combined <- net_plot + cent_plot +
-    plot_layout(ncol=2, widths=c(2.5,1), guides="collect")
-  
-  # Aplicar tema global para centrar la leyenda
-  combined <- combined +
-    patchwork::plot_annotation(
-      theme = ggplot2::theme(
-        legend.position = "bottom",
-        legend.direction = "horizontal",
-        legend.justification = "center",
-        legend.box = "horizontal",
-        legend.title = ggplot2::element_text(size = 10, face = "bold"),
-        legend.text = ggplot2::element_text(size = 8),
-        legend.margin = ggplot2::margin(t = 8, b = 5),
-        plot.margin = ggplot2::margin(t = 5, r = 5, b = 15, l = 5)
-      )
-    )
-  
-  list(plot = combined, table = cents)
-}
-
-# ========================================
-# Funciones para Análisis Semántico (OpenAI API)
-# ========================================
-
-# Embeddings via OpenAI
-obtener_embeddings_openai <- function(textos, api_key, modelo = "text-embedding-3-small") {
-  all_embeddings <- list()
-  batch_size <- 100
-  n_batches <- ceiling(length(textos) / batch_size)
-
-  for (i in seq_len(n_batches)) {
-    start_idx <- (i - 1) * batch_size + 1
-    end_idx <- min(i * batch_size, length(textos))
-    batch_textos <- textos[start_idx:end_idx]
-
-    resp <- httr::POST(
-      "https://api.openai.com/v1/embeddings",
-      httr::add_headers(
-        Authorization = paste("Bearer", api_key),
-        `Content-Type` = "application/json"
-      ),
-      httr::timeout(120),
-      body = jsonlite::toJSON(list(
-        model = modelo,
-        input = batch_textos
-      ), auto_unbox = TRUE)
-    )
-
-    if (httr::status_code(resp) == 200) {
-      content <- httr::content(resp)
-      for (item in content$data) {
-        all_embeddings[[length(all_embeddings) + 1]] <- unlist(item$embedding)
-      }
-    } else {
-      stop(paste("Error OpenAI Embeddings:", httr::status_code(resp)))
-    }
-  }
-
-  embeddings_matrix <- do.call(rbind, all_embeddings)
-  return(embeddings_matrix)
-}
-
-# Función para calcular similitud coseno
-calcular_similitud_coseno <- function(embeddings_matrix) {
-  if (is.null(embeddings_matrix) || nrow(embeddings_matrix) < 2) {
-    return(NULL)
-  }
-
-  # Normalizar vectores
-  normas <- sqrt(rowSums(embeddings_matrix^2))
-  normas[normas == 0] <- 1  # Evitar división por cero
-  embeddings_norm <- embeddings_matrix / normas
-
-  # Calcular matriz de similitud coseno
-  similitud <- embeddings_norm %*% t(embeddings_norm)
-
-  return(similitud)
-}
-
-# Función para clustering semántico
-clustering_semantico <- function(embeddings_matrix, n_clusters = NULL, metodo = "kmeans") {
-  if (is.null(embeddings_matrix) || nrow(embeddings_matrix) < 2) {
-    return(NULL)
-  }
-
-  n_obs <- nrow(embeddings_matrix)
-
-  # Determinar número óptimo de clusters si no se especifica
-  if (is.null(n_clusters)) {
-    n_clusters <- min(max(2, floor(sqrt(n_obs / 2))), n_obs - 1)
-  }
-
-  n_clusters <- min(n_clusters, n_obs - 1)
-
-  if (metodo == "kmeans") {
-    set.seed(2026)
-    km <- kmeans(embeddings_matrix, centers = n_clusters, nstart = 25, iter.max = 100)
-
-    resultado <- list(
-      clusters = km$cluster,
-      centros = km$centers,
-      total_ss = km$totss,
-      within_ss = km$tot.withinss,
-      between_ss = km$betweenss,
-      n_clusters = n_clusters
-    )
-  } else if (metodo == "hclust") {
-    dist_matrix <- dist(embeddings_matrix)
-    hc <- hclust(dist_matrix, method = "ward.D2")
-    clusters <- cutree(hc, k = n_clusters)
-
-    resultado <- list(
-      clusters = clusters,
-      hclust_obj = hc,
-      n_clusters = n_clusters
-    )
-  }
-
-  return(resultado)
-}
-
-# Función para detectar fragmentos similares con diferente código
-detectar_similares_diferente_codigo <- function(tabla, similitud_matrix, umbral = 0.8, labels = list(alta = "High similarity - review coding", moderada = "Moderate similarity - consider merging")) {
-  if (is.null(similitud_matrix) || nrow(tabla) < 2) {
-    return(tibble())
-  }
-
-  n <- nrow(similitud_matrix)
-  inconsistencias <- list()
-
-  for (i in 1:(n-1)) {
-    for (j in (i+1):n) {
-      sim <- similitud_matrix[i, j]
-      if (sim >= umbral) {
-        codigo_i <- tabla$Codigo[i]
-        codigo_j <- tabla$Codigo[j]
-
-        if (codigo_i != codigo_j) {
-          inconsistencias[[length(inconsistencias) + 1]] <- tibble(
-            Fragmento1 = tabla$Extracto[i],
-            Codigo1 = codigo_i,
-            Fragmento2 = tabla$Extracto[j],
-            Codigo2 = codigo_j,
-            Similitud = round(sim, 3),
-            Sugerencia = ifelse(sim > 0.9, labels$alta, labels$moderada)
-          )
-        }
-      }
-    }
-  }
-
-  if (length(inconsistencias) > 0) {
-    return(bind_rows(inconsistencias) %>% arrange(desc(Similitud)))
-  }
-
-  return(tibble())
-}
-
-# Función para analizar coherencia de códigos
-analizar_coherencia_codigos <- function(tabla, similitud_matrix) {
-  if (is.null(similitud_matrix) || nrow(tabla) < 2) {
-    return(tibble())
-  }
-
-  codigos_unicos <- unique(tabla$Codigo)
-  coherencia_por_codigo <- list()
-
-  for (codigo in codigos_unicos) {
-    indices <- which(tabla$Codigo == codigo)
-
-    if (length(indices) >= 2) {
-      # Obtener submatriz de similitud para este código
-      sub_sim <- similitud_matrix[indices, indices, drop = FALSE]
-
-      # Calcular estadísticas de coherencia
-      valores <- sub_sim[lower.tri(sub_sim)]
-
-      coherencia_por_codigo[[length(coherencia_por_codigo) + 1]] <- tibble(
-        Codigo = codigo,
-        N_Fragmentos = length(indices),
-        Coherencia_Media = round(mean(valores), 3),
-        Coherencia_Min = round(min(valores), 3),
-        Coherencia_Max = round(max(valores), 3),
-        Coherencia_SD = round(sd(valores), 3),
-        Evaluacion = case_when(
-          mean(valores) >= 0.8 ~ "excellent",
-          mean(valores) >= 0.6 ~ "good",
-          mean(valores) >= 0.4 ~ "moderate",
-          TRUE ~ "low_review"
-        )
-      )
-    } else {
-      coherencia_por_codigo[[length(coherencia_por_codigo) + 1]] <- tibble(
-        Codigo = codigo,
-        N_Fragmentos = length(indices),
-        Coherencia_Media = NA_real_,
-        Coherencia_Min = NA_real_,
-        Coherencia_Max = NA_real_,
-        Coherencia_SD = NA_real_,
-        Evaluacion = "insufficient"
-      )
-    }
-  }
-
-  return(bind_rows(coherencia_por_codigo) %>% arrange(desc(Coherencia_Media)))
-}
-
-# Función para calcular red semántica de códigos
-calcular_red_semantica_codigos <- function(embeddings_matrix, tabla, umbral_conexion = 0.5) {
-  if (is.null(embeddings_matrix) || nrow(tabla) < 2) {
-    return(NULL)
-  }
-
-  # Obtener códigos únicos
-  codigos_unicos <- unique(tabla$Codigo)
-
-  if (length(codigos_unicos) < 2) {
-    return(NULL)
-  }
-
-  # Calcular centroide (embedding promedio) para cada código
-  centroides <- list()
-  frecuencias <- list()
-  categorias <- list()
-
-  for (codigo in codigos_unicos) {
-    indices <- which(tabla$Codigo == codigo)
-    if (length(indices) > 0) {
-      # Centroide = promedio de embeddings
-      if (length(indices) == 1) {
-        centroides[[codigo]] <- embeddings_matrix[indices, ]
-      } else {
-        centroides[[codigo]] <- colMeans(embeddings_matrix[indices, , drop = FALSE])
-      }
-      frecuencias[[codigo]] <- length(indices)
-      categorias[[codigo]] <- tabla$Categoria[indices[1]]
-    }
-  }
-
-  # Crear matriz de centroides
-  centroide_matrix <- do.call(rbind, centroides)
-  rownames(centroide_matrix) <- codigos_unicos
-
-  # Calcular similitud coseno entre centroides
-  normas <- sqrt(rowSums(centroide_matrix^2))
-  normas[normas == 0] <- 1
-  centroide_norm <- centroide_matrix / normas
-  similitud_codigos <- centroide_norm %*% t(centroide_norm)
-
-  # Crear nodos
-
-  nodos <- tibble(
-    name = codigos_unicos,
-    frecuencia = unlist(frecuencias[codigos_unicos]),
-    categoria = unlist(categorias[codigos_unicos]),
-    size = scales::rescale(unlist(frecuencias[codigos_unicos]), to = c(5, 25))
-  )
-
-  # Crear edges (conexiones) basadas en umbral de similitud
-  edges <- list()
-  n <- length(codigos_unicos)
-
-  for (i in 1:(n-1)) {
-    for (j in (i+1):n) {
-      sim <- similitud_codigos[i, j]
-      if (sim >= umbral_conexion) {
-        edges[[length(edges) + 1]] <- tibble(
-          from = codigos_unicos[i],
-          to = codigos_unicos[j],
-          weight = round(sim, 3),
-          width = scales::rescale(sim, to = c(0.5, 4), from = c(umbral_conexion, 1))
-        )
-      }
-    }
-  }
-
-  edges_df <- if (length(edges) > 0) bind_rows(edges) else tibble(from = character(), to = character(), weight = numeric(), width = numeric())
-
-  # Crear grafo con tidygraph
-  if (nrow(edges_df) > 0) {
-    grafo <- tidygraph::tbl_graph(nodes = nodos, edges = edges_df, directed = FALSE)
-  } else {
-    # Sin conexiones, solo nodos
-    grafo <- tidygraph::tbl_graph(nodes = nodos, edges = edges_df, directed = FALSE)
-  }
-
-  return(list(
-    grafo = grafo,
-    nodos = nodos,
-    edges = edges_df,
-    similitud_matrix = similitud_codigos,
-    n_codigos = length(codigos_unicos),
-    n_conexiones = nrow(edges_df)
-  ))
-}
-
-# Función para visualización de embeddings (t-SNE/PCA)
-plot_embeddings_semantico <- function(embeddings_matrix, tabla, metodo = "pca", labels = list(title_fn = function(m) paste0("Embedding Visualization (", toupper(m), ")"), dim1_fn = function(m) paste(toupper(m), "Dimension 1"), dim2_fn = function(m) paste(toupper(m), "Dimension 2"), code = "Code")) {
-  if (is.null(embeddings_matrix) || nrow(embeddings_matrix) < 3) {
-    return(NULL)
-  }
-
-  n_obs <- nrow(embeddings_matrix)
-
-  if (metodo == "tsne" && requireNamespace("Rtsne", quietly = TRUE)) {
-    set.seed(2026)
-    perplexity <- min(30, floor((n_obs - 1) / 3))
-    perplexity <- max(perplexity, 1)
-
-    tsne_result <- Rtsne::Rtsne(embeddings_matrix, dims = 2, perplexity = perplexity,
-                                 verbose = FALSE, max_iter = 500)
-    coords <- data.frame(
-      X = tsne_result$Y[, 1],
-      Y = tsne_result$Y[, 2]
-    )
-  } else if (metodo == "umap" && requireNamespace("umap", quietly = TRUE)) {
-    set.seed(2026)
-    n_neighbors <- min(15, n_obs - 1)
-    umap_result <- umap::umap(embeddings_matrix, n_neighbors = n_neighbors)
-    coords <- data.frame(
-      X = umap_result$layout[, 1],
-      Y = umap_result$layout[, 2]
-    )
-  } else {
-    # PCA como fallback
-    pca_result <- prcomp(embeddings_matrix, scale. = TRUE)
-    coords <- data.frame(
-      X = pca_result$x[, 1],
-      Y = pca_result$x[, 2]
-    )
-    metodo <- "pca"
-  }
-
-  # Preparar datos para el gráfico
-  plot_data <- coords %>%
-    mutate(
-      Codigo = tabla$Codigo[1:nrow(coords)],
-      Extracto = stringr::str_trunc(tabla$Extracto[1:nrow(coords)], 50),
-      Categoria = tabla$Categoria[1:nrow(coords)]
-    )
-
-  # Crear gráfico
-  p <- ggplot(plot_data, aes(x = X, y = Y, color = Codigo, text = Extracto)) +
-    geom_point(size = 3, alpha = 0.7) +
-    labs(
-      title = labels$title_fn(metodo),
-      x = labels$dim1_fn(metodo),
-      y = labels$dim2_fn(metodo),
-      color = labels$code
-    ) +
-    theme_minimal(base_size = 12) +
-    theme(
-      legend.position = "right",
-      plot.title = element_text(face = "bold", hjust = 0.5)
-    )
-
-  return(p)
-}
-
-# Función para validar codificación con LLM (OpenAI)
-validar_codificacion_llm <- function(fragmentos, codigos, api_key, lang = "en") {
-  if (is.null(fragmentos) || length(fragmentos) == 0) {
-    stop(if (lang == "es") "No hay fragmentos para validar" else "No fragments to validate")
-  }
-
-  if (is.null(api_key) || !nzchar(api_key)) {
-    stop(if (lang == "es") "API Key de OpenAI no proporcionada" else "OpenAI API Key not provided")
-  }
-
-  # Preparar prompt para validación
-  frag_label <- if (lang == "es") "Fragmento" else "Fragment"
-  code_label <- if (lang == "es") "Código" else "Code"
-  fragmentos_texto <- paste(
-    sapply(seq_along(fragmentos), function(i) {
-      paste0(frag_label, " ", i, " [", code_label, ": ", codigos[i], "]: \"", fragmentos[i], "\"")
-    }),
-    collapse = "\n"
-  )
-
-  if (lang == "es") {
-    prompt <- paste0(
-      "Actúa como un panel de 3 expertos en análisis cualitativo. Evalúa si los siguientes fragmentos están correctamente codificados:\n\n",
-      fragmentos_texto,
-      "\n\nPara cada fragmento, proporciona:\n",
-      "1. Evaluación (Correcto/Revisar/Incorrecto)\n",
-      "2. Justificación breve\n",
-      "3. Código alternativo sugerido (si aplica)\n\n",
-      "Responde en formato estructurado."
-    )
-  } else {
-    prompt <- paste0(
-      "Act as a panel of 3 qualitative analysis experts. Evaluate whether the following fragments are correctly coded:\n\n",
-      fragmentos_texto,
-      "\n\nFor each fragment, provide:\n",
-      "1. Evaluation (Correct/Review/Incorrect)\n",
-      "2. Brief justification\n",
-      "3. Suggested alternative code (if applicable)\n\n",
-      "Respond in structured format."
-    )
-  }
-
-  # Llamar a OpenAI
-  resultado <- call_openai_api(prompt, api_key)
-
-  if (is.null(resultado) || !nzchar(resultado)) {
-    stop(if (lang == "es") "No se recibió respuesta de OpenAI" else "No response received from OpenAI")
-  }
-
-  return(resultado)
-}
-
-# ========================================
-# ========================================
-# Configuración de OpenAI API (GPT-4.1)
-# ========================================
-OPENAI_MODEL <- "gpt-4.1"  # Modelo principal
-
-# ========================================
-# Función principal para llamar a OpenAI
-# ========================================
-call_openai_api <- function(prompt, api_key, system_prompt = NULL) {
-  if (is.null(system_prompt)) {
-    system_prompt <- "You are an expert in qualitative textual data analysis and thematic coding."
-  }
-
-  resp <- httr::POST(
-    "https://api.openai.com/v1/chat/completions",
-    httr::add_headers(
-      Authorization = paste("Bearer", api_key),
-      `Content-Type` = "application/json"
-    ),
-    httr::timeout(180),
-    body = jsonlite::toJSON(list(
-      model = OPENAI_MODEL,
-      messages = list(
-        list(role = "system", content = system_prompt),
-        list(role = "user", content = prompt)
-      ),
-      temperature = 0.3,
-      max_tokens = 4096
-    ), auto_unbox = TRUE)
-  )
-
-  if (httr::status_code(resp) == 200) {
-    content <- httr::content(resp)
-    return(content$choices[[1]]$message$content)
-  } else {
-    error_content <- httr::content(resp, "text", encoding = "UTF-8")
-    stop(paste("Error OpenAI (", httr::status_code(resp), "):", error_content))
-  }
-}
 
 # ========================================
 # Internationalization (i18n) - Embedded translations for deployment compatibility
@@ -1378,13 +601,9 @@ translations <- jsonlite::fromJSON(r"--(
       "descripcion": "Please enter your details to continue",
       "nombre": "Full Name",
       "correo": "Email",
-      "universidad": "University / Institution",
-      "residencia": "Place of Residence",
       "boton": "Enter Application",
       "error_nombre": "Please enter your full name",
-      "error_correo": "Please enter a valid email",
-      "error_universidad": "Please enter your university or institution",
-      "error_residencia": "Please enter your place of residence"
+      "error_correo": "Please enter a valid email"
     }
   },
   "es": {
@@ -1904,13 +1123,9 @@ translations <- jsonlite::fromJSON(r"--(
       "descripcion": "Por favor, ingrese sus datos para continuar",
       "nombre": "Nombre Completo",
       "correo": "Correo Electr\u00f3nico",
-      "universidad": "Universidad / Instituci\u00f3n",
-      "residencia": "Lugar de Residencia",
       "boton": "Ingresar a la Aplicaci\u00f3n",
       "error_nombre": "Por favor ingrese su nombre completo",
-      "error_correo": "Por favor ingrese un correo v\u00e1lido",
-      "error_universidad": "Por favor ingrese su universidad o instituci\u00f3n",
-      "error_residencia": "Por favor ingrese su lugar de residencia"
+      "error_correo": "Por favor ingrese un correo v\u00e1lido"
     }
   }
 }
@@ -1958,617 +1173,7 @@ ui <- dashboardPage(
     ),
     tags$head(
       tags$link(href = "https://fonts.googleapis.com/css2?family=Source+Sans+Pro:wght@300;400;600;700&family=Source+Serif+Pro:wght@400;600;700&display=swap", rel = "stylesheet"),
-      tags$style(HTML("
-        /* Language toggle fix */
-        .navbar-custom-menu .form-group.shiny-input-container {
-          margin-bottom: 0 !important;
-          display: inline-flex;
-          align-items: center;
-          gap: 12px;
-        }
-        .navbar-custom-menu label,
-        .navbar-custom-menu .form-group label,
-        .navbar-custom-menu .shiny-input-container label {
-          color: #fff !important;
-          font-weight: 600 !important;
-          font-size: 14px !important;
-          margin: 0 0 0 10px !important;
-          padding: 0 !important;
-        }
-
-        /* ===== RCualiText - Diseño Académico Formal ===== */
-
-        /* Variables de color académicas */
-        :root {
-          --primary: #2c3e50;
-          --primary-light: #34495e;
-          --secondary: #7f8c8d;
-          --accent: #2980b9;
-          --success: #27ae60;
-          --warning: #d35400;
-          --danger: #c0392b;
-          --text-dark: #1a1a2e;
-          --text-medium: #4a4a4a;
-          --text-light: #6c757d;
-          --bg-light: #f8f9fa;
-          --bg-white: #ffffff;
-          --border-color: #dee2e6;
-        }
-
-        /* Estilos generales - Diseño claro académico */
-        body {
-          font-family: 'Source Sans Pro', -apple-system, BlinkMacSystemFont, sans-serif;
-          background: var(--bg-light);
-          color: var(--text-dark);
-          min-height: 100vh;
-        }
-
-        .content-wrapper {
-          background: #f4f6f9;
-          min-height: 100vh;
-          padding: 20px;
-        }
-
-        /* === SIDEBAR - Estilos forzados === */
-        .main-sidebar,
-        .left-side,
-        .skin-black .main-sidebar,
-        .skin-black .left-side {
-          background: #f4f6f9 !important;
-          border-right: 1px solid #e0e4e8 !important;
-          box-shadow: none !important;
-        }
-
-        .skin-black .sidebar-menu > li > a,
-        .main-sidebar .sidebar-menu > li > a,
-        .sidebar-menu > li > a {
-          color: #2c3e50 !important;
-          background: transparent !important;
-          border-left: 3px solid transparent !important;
-          padding: 12px 15px !important;
-          font-size: 14px !important;
-          transition: all 0.2s ease;
-        }
-
-        .skin-black .sidebar-menu > li > a:hover,
-        .main-sidebar .sidebar-menu > li > a:hover,
-        .sidebar-menu > li > a:hover {
-          background: #ebeef2 !important;
-          color: #1a252f !important;
-          border-left-color: #2c3e50 !important;
-        }
-
-        .skin-black .sidebar-menu > li.active > a,
-        .main-sidebar .sidebar-menu > li.active > a,
-        .sidebar-menu > li.active > a {
-          background: #e0e4e8 !important;
-          color: #1a252f !important;
-          border-left-color: #2c3e50 !important;
-        }
-
-        .sidebar-menu > li > a > .fa,
-        .sidebar-menu > li > a > .glyphicon,
-        .sidebar-menu > li > a > i {
-          color: #5a6c7d !important;
-        }
-
-        .sidebar-menu > li.active > a > .fa,
-        .sidebar-menu > li.active > a > .glyphicon,
-        .sidebar-menu > li.active > a > i {
-          color: #2c3e50 !important;
-        }
-
-        /* Separador del sidebar */
-        .skin-black .sidebar-menu > li.header,
-        .sidebar-menu > li.header {
-          color: #7f8c8d !important;
-          background: transparent !important;
-          padding: 10px 15px !important;
-          font-size: 11px !important;
-          text-transform: uppercase !important;
-          letter-spacing: 1px !important;
-        }
-
-        /* === HEADER - Franja superior oscura uniforme === */
-        .main-header .navbar,
-        .skin-black .main-header .navbar {
-          background: #2c3e50 !important;
-          border-bottom: 1px solid #1a252f !important;
-          box-shadow: none !important;
-        }
-
-        .main-header .navbar .nav > li > a,
-        .skin-black .main-header .navbar .nav > li > a {
-          color: #ffffff !important;
-        }
-
-        .main-header .navbar .nav > li > a:hover,
-        .skin-black .main-header .navbar .nav > li > a:hover {
-          background: #1a252f !important;
-        }
-
-        .main-header .logo,
-        .skin-black .main-header .logo {
-          background: #2c3e50 !important;
-          color: #ffffff !important;
-          border-right: 1px solid #1a252f !important;
-          border-bottom: 1px solid #1a252f !important;
-          font-family: 'Source Serif Pro', Georgia, serif;
-          font-weight: 700;
-        }
-
-        .main-header .logo:hover,
-        .skin-black .main-header .logo:hover {
-          background: #1a252f !important;
-        }
-
-        .main-header .sidebar-toggle,
-        .skin-black .main-header .sidebar-toggle {
-          color: #ffffff !important;
-          background: transparent !important;
-        }
-
-        .main-header .sidebar-toggle:hover,
-        .skin-black .main-header .sidebar-toggle:hover {
-          background: #1a252f !important;
-        }
-
-        /* Cajas - Diseño limpio y profesional */
-        .box {
-          border-radius: 6px;
-          box-shadow: 0 1px 3px rgba(0,0,0,0.06);
-          border: 1px solid #e0e4e8;
-          overflow: hidden;
-          transition: box-shadow 0.2s ease;
-          background: var(--bg-white);
-        }
-
-        .box:hover {
-          box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-        }
-
-        .box-header {
-          background: #ffffff;
-          color: #2c3e50;
-          border-radius: 6px 6px 0 0;
-          padding: 14px 18px;
-          border-bottom: 1px solid #e0e4e8;
-        }
-
-        .box-header.with-border {
-          border-bottom: 1px solid #e0e4e8;
-        }
-
-        .box-title {
-          font-family: 'Source Serif Pro', Georgia, serif;
-          font-weight: 600;
-          font-size: 15px;
-          letter-spacing: 0.2px;
-          color: #2c3e50;
-        }
-
-        .box-body {
-          padding: 20px;
-          color: var(--text-dark);
-          background: #ffffff;
-        }
-
-
-        /* Estilos para resaltado - Más sutiles */
-        .highlight-multiple {
-          position: relative;
-          padding: 2px 6px;
-          border-radius: 3px;
-          transition: all 0.2s ease;
-          cursor: pointer;
-          display: inline;
-          border-bottom: 2px solid currentColor;
-        }
-
-        .highlight-multiple:hover {
-          opacity: 0.85;
-          z-index: 10;
-        }
-
-        /* Indicador visual para modo deselección */
-        #document-viewer.deselect-mode .highlight-multiple:hover {
-          box-shadow: 0 0 0 2px #c0392b;
-        }
-
-        /* Tooltip */
-        .highlight-multiple[title]:hover::after {
-          content: attr(title);
-          position: absolute;
-          top: -35px;
-          left: 50%;
-          transform: translateX(-50%);
-          background: #2c3e50;
-          color: white;
-          padding: 6px 12px;
-          border-radius: 3px;
-          font-size: 11px;
-          white-space: nowrap;
-          z-index: 1000;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-        }
-
-        .highlight-multiple[title]:hover::before {
-          content: '';
-          position: absolute;
-          top: -8px;
-          left: 50%;
-          transform: translateX(-50%);
-          border-left: 6px solid transparent;
-          border-right: 6px solid transparent;
-          border-top: 6px solid #2c3e50;
-          z-index: 1001;
-        }
-
-        /* Botones de modo */
-        .mode-button {
-          margin: 6px 4px;
-          border-radius: 4px;
-          padding: 8px 16px;
-          font-weight: 600;
-          transition: all 0.2s ease;
-          border: 1px solid #e0e4e8;
-        }
-
-        .mode-button:hover {
-          background: #f4f6f9;
-          border-color: #d0d4d8;
-        }
-
-        .mode-button.active {
-          background: #2c3e50 !important;
-          color: white !important;
-          border-color: #2c3e50 !important;
-        }
-
-        .deselect-active {
-          background: #5a6c7d !important;
-          border-color: #5a6c7d !important;
-          color: white !important;
-        }
-
-        /* Visor de texto */
-        #document-viewer.content {
-          background: var(--bg-white);
-          padding: 24px 28px;
-          border-radius: 4px;
-          box-shadow: inset 0 1px 3px rgba(0,0,0,0.05);
-          border: 1px solid var(--border-color);
-          position: relative;
-          color: var(--text-dark);
-          line-height: 1.7;
-        }
-
-        #document-viewer.content::before {
-          content: '';
-          position: absolute;
-          top: 0;
-          left: 0;
-          right: 0;
-          height: 3px;
-          background: #5a6c7d;
-          border-radius: 6px 6px 0 0;
-        }
-
-        /* Eliminar márgenes del contenido del visor */
-        #contenido {
-          margin: 0 !important;
-          padding: 0 !important;
-        }
-
-        #document-viewer .content > div {
-          margin-top: 0 !important;
-          padding-top: 0 !important;
-        }
-
-        #document-viewer .sk-folding-cube {
-          margin-top: 10px !important;
-        }
-
-        #contenido > * {
-          margin-top: 0 !important;
-        }
-
-        #contenido > *:first-child {
-          margin-top: 0 !important;
-          padding-top: 0 !important;
-        }
-
-        /* Botones - Diseño limpio */
-        .btn {
-          border-radius: 4px;
-          font-weight: 600;
-          transition: all 0.2s ease;
-          border: 1px solid transparent;
-          box-shadow: none;
-          text-transform: none;
-          letter-spacing: 0.3px;
-        }
-
-        .btn:hover {
-          transform: none;
-        }
-
-        .btn-primary {
-          background: #2c3e50;
-          border-color: #2c3e50;
-          color: white;
-        }
-
-        .btn-primary:hover, .btn-primary:focus {
-          background: #1a252f;
-          border-color: #1a252f;
-        }
-
-        .btn-success {
-          background: #27ae60;
-          border-color: #27ae60;
-          color: white;
-        }
-
-        .btn-success:hover {
-          background: #219a52;
-          border-color: #219a52;
-        }
-
-        .btn-danger {
-          background: #c0392b;
-          border-color: #c0392b;
-          color: white;
-        }
-
-        .btn-danger:hover {
-          background: #a93226;
-          border-color: #a93226;
-        }
-
-        .btn-info {
-          background: #5a6c7d;
-          border-color: #5a6c7d;
-          color: white;
-        }
-
-        .btn-info:hover {
-          background: #4a5a69;
-          border-color: #4a5a69;
-        }
-
-        .btn-warning {
-          background: #d35400;
-          border-color: #d35400;
-          color: white;
-        }
-
-        .btn-warning:hover {
-          background: #b94700;
-          border-color: #b94700;
-        }
-
-        .btn-default {
-          background: #ffffff;
-          border-color: #e0e4e8;
-          color: #2c3e50;
-        }
-
-        .btn-default:hover {
-          background: #f4f6f9;
-          border-color: #d0d4d8;
-        }
-
-        /* Inputs */
-        .form-control {
-          border-radius: 4px;
-          border: 1px solid var(--border-color);
-          transition: border-color 0.2s ease;
-          padding: 10px 12px;
-          background: var(--bg-white);
-        }
-
-        .form-control:focus {
-          border-color: #2980b9;
-          box-shadow: 0 0 0 2px rgba(41,128,185,0.15);
-        }
-
-        .form-control::placeholder {
-          color: #adb5bd;
-        }
-
-        /* Labels */
-        label, .control-label {
-          color: var(--text-dark);
-          font-weight: 600;
-          font-size: 13px;
-          margin-bottom: 6px;
-        }
-
-        /* Selectores y dropdowns */
-        .selectize-input, .selectize-dropdown {
-          background: var(--bg-white) !important;
-          border-color: var(--border-color) !important;
-          color: var(--text-dark) !important;
-          border-radius: 4px !important;
-        }
-
-        .selectize-input.focus {
-          border-color: #2980b9 !important;
-          box-shadow: 0 0 0 2px rgba(41,128,185,0.15) !important;
-        }
-
-        /* File input */
-        .btn-file {
-          background: #2c3e50;
-          border: none;
-          color: white;
-          border-radius: 4px;
-        }
-
-        /* Progress bar */
-        .progress-bar {
-          background: #2980b9;
-        }
-
-        /* Tablas - Diseño académico claro */
-        .dataTables_wrapper {
-          border-radius: 6px;
-          overflow: hidden;
-        }
-
-        table.dataTable thead th {
-          background: #f4f6f9;
-          color: #2c3e50;
-          border: none;
-          border-bottom: 2px solid #e0e4e8;
-          font-weight: 600;
-          font-size: 13px;
-          padding: 12px 15px;
-        }
-
-        table.dataTable tbody tr:hover {
-          background: #f8f9fa;
-        }
-
-        table.dataTable tbody td {
-          color: var(--text-dark);
-          border-color: #e0e4e8;
-          padding: 10px 15px;
-          font-size: 13px;
-        }
-
-        .dataTables_wrapper .dataTables_filter input,
-        .dataTables_wrapper .dataTables_length select {
-          background: var(--bg-white);
-          color: var(--text-dark);
-          border: 1px solid #e0e4e8;
-          border-radius: 4px;
-        }
-
-        .dataTables_wrapper .dataTables_info,
-        .dataTables_wrapper .dataTables_paginate {
-          color: var(--text-light);
-          font-size: 13px;
-        }
-
-        /* Info panels - Diseño sobrio */
-        .info-panel {
-          background: #f8f9fa;
-          border: 1px solid #e0e4e8;
-          border-left: 3px solid #5a6c7d;
-          border-radius: 0 4px 4px 0;
-          padding: 15px 18px;
-          margin: 12px 0;
-        }
-
-        .danger-panel {
-          background: #fdf8f8;
-          border-color: #e8d4d4;
-          border-left-color: #c0392b;
-        }
-
-        /* Controles de descarga */
-        .download-controls-container {
-          background: #f8f9fa;
-          border: 1px solid #e0e4e8;
-          border-left: 3px solid #5a6c7d;
-          border-radius: 0 4px 4px 0;
-          padding: 15px 18px;
-          margin: 10px 0;
-        }
-
-        .download-controls-container::before {
-          display: none;
-        }
-
-        .download-controls-grid {
-          display: grid;
-          grid-template-columns: 1fr 1fr 1fr auto;
-          gap: 15px;
-          align-items: end;
-        }
-
-        /* Spinner */
-        .sk-folding-cube {
-          margin: 20px auto;
-          width: 30px;
-          height: 30px;
-        }
-
-        /* Box status - Borde superior neutro */
-        .box.box-primary {
-          border-top-color: #5a6c7d !important;
-        }
-
-        .box.box-primary > .box-header {
-          background: #ffffff !important;
-          color: #2c3e50 !important;
-        }
-
-        .box.box-solid.box-primary {
-          border: 1px solid #e0e4e8 !important;
-        }
-
-        .box.box-solid.box-primary > .box-header {
-          background: #f4f6f9 !important;
-          color: #2c3e50 !important;
-        }
-
-        .box.box-solid.box-primary > .box-header > .box-title {
-          color: #2c3e50 !important;
-        }
-
-        .box.box-solid.box-primary > .box-header .btn {
-          color: #2c3e50 !important;
-        }
-
-        /* Tarjetas de análisis semántico */
-        .semantico-card {
-          background: var(--bg-white) !important;
-          border: 1px solid #e0e4e8 !important;
-          border-radius: 6px !important;
-        }
-
-        .semantico-card h5 {
-          color: var(--text-dark) !important;
-          font-family: 'Source Serif Pro', Georgia, serif;
-        }
-
-        /* Tabs */
-        .nav-pills > li > a {
-          border-radius: 4px;
-          color: var(--text-dark);
-          font-weight: 600;
-          border: 1px solid transparent;
-        }
-
-        .nav-pills > li > a:hover {
-          background: #f4f6f9;
-        }
-
-        .nav-pills > li.active > a,
-        .nav-pills > li.active > a:hover,
-        .nav-pills > li.active > a:focus {
-          background: #2c3e50;
-          color: white;
-          border-color: #2c3e50;
-        }
-
-        /* Encabezados */
-        h4, h5, h6 {
-          font-family: 'Source Serif Pro', Georgia, serif;
-          color: var(--text-dark);
-        }
-
-        /* Badges */
-        .badge {
-          font-weight: 600;
-          font-size: 10px;
-          padding: 3px 8px;
-          border-radius: 3px;
-        }
-      "))
+      tags$link(rel = "stylesheet", type = "text/css", href = "styles.css")
     ),
     tags$script(HTML("
       // Variables globales para el modo de deselección
@@ -3568,7 +2173,7 @@ ui <- dashboardPage(
                     
                     div(
                       style = "background: #f4f6f9; padding: 25px; border-left: 5px solid #2c3e50; margin: 20px 0; font-family: 'Georgia', serif; font-size: 16px; line-height: 2; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.06);",
-                      HTML("Ventura-León, J. (2026). <em>RCualiText</em> (v1.0) [Shiny app]. GitHub. https://github.com/jventural/RCualiText_App")
+                      HTML(paste0("Ventura-Le\u00f3n, J. (2026). <em>RCualiText</em> (v", APP_VERSION, ") [Shiny app]. GitHub. https://github.com/jventural/RCualiText_App"))
                     ),
                     
                     div(
@@ -3593,7 +2198,7 @@ ui <- dashboardPage(
                         style = "space-y: 10px;",
                         div(strong(span(id = "lbl_autor", "Author: ")), "Dr. José Ventura-León"),
                         div(strong(span(id = "lbl_anio", "Year: ")), "2026"),
-                        div(strong(span(id = "lbl_version", "Version: ")), "2.0"),
+                        div(strong(span(id = "lbl_version", "Version: ")), APP_VERSION),
                         div(strong(span(id = "lbl_tipo", "Type: ")), span(id = "val_tipo", "Shiny app for qualitative analysis")),
                         div(strong(span(id = "lbl_repositorio", "Repository: ")),
                             tags$a("GitHub",
@@ -3810,9 +2415,7 @@ server <- function(input, output, session) {
 
           div(class = "login-field",
             textInput("reg_nombre", tr("login.nombre"), placeholder = tr("login.nombre")),
-            textInput("reg_correo", tr("login.correo"), placeholder = "example@university.edu"),
-            textInput("reg_universidad", tr("login.universidad"), placeholder = tr("login.universidad")),
-            textInput("reg_residencia", tr("login.residencia"), placeholder = tr("login.residencia"))
+            textInput("reg_correo", tr("login.correo"), placeholder = "example@university.edu")
           ),
 
           actionButton("btn_registro", tr("login.boton"), class = "btn-registro",
@@ -3823,7 +2426,7 @@ server <- function(input, output, session) {
         div(
           style = "padding: 15px 40px; background: #f8f9fa; text-align: center; border-top: 1px solid #e0e6ed;",
           p(style = "margin: 0; color: #95a5a6; font-size: 12px;",
-            "Dr. Jos\u00e9 Ventura-Le\u00f3n | RCualiText v1.0")
+            paste0("Dr. Jos\u00e9 Ventura-Le\u00f3n | RCualiText v", APP_VERSION))
         )
       )
     )
@@ -3838,8 +2441,6 @@ server <- function(input, output, session) {
   observeEvent(input$btn_registro, {
     nombre <- trimws(input$reg_nombre %||% "")
     correo <- trimws(input$reg_correo %||% "")
-    universidad <- trimws(input$reg_universidad %||% "")
-    residencia <- trimws(input$reg_residencia %||% "")
 
     # Validations
     if (nchar(nombre) == 0) {
@@ -3850,17 +2451,9 @@ server <- function(input, output, session) {
       error_registro(tr("login.error_correo"))
       return()
     }
-    if (nchar(universidad) == 0) {
-      error_registro(tr("login.error_universidad"))
-      return()
-    }
-    if (nchar(residencia) == 0) {
-      error_registro(tr("login.error_residencia"))
-      return()
-    }
 
     # Save registration
-    guardar_registro(nombre, correo, universidad, residencia)
+    guardar_registro(nombre, correo)
 
     # Clear error and hide login overlay
     error_registro("")
@@ -5062,7 +3655,7 @@ server <- function(input, output, session) {
   # ========================================
   
   observeEvent(input$copycitation, {
-    citation_text <- "Ventura-León, J. (2026). RCualiText (v1.0) [Shiny app]. GitHub. https://github.com/jventural/RCualiText_App"
+    citation_text <- paste0("Ventura-Le\u00f3n, J. (2026). RCualiText (v", APP_VERSION, ") [Shiny app]. GitHub. https://github.com/jventural/RCualiText_App")
     
     # Usar JavaScript para copiar al portapapeles
     shinyjs::runjs(paste0("
@@ -5322,10 +3915,10 @@ server <- function(input, output, session) {
         red_semantica = rv$red_semantica,
         visualizacion_2d = rv$visualizacion_2d,
         # Metadatos
-        version = "2.5_con_visualizacion",
+        version = paste0(APP_VERSION, "_con_visualizacion"),
         metadata = list(
           created = Sys.time(),
-          app_version = "RCualiText v2.4 con IA, Análisis Semántico y Red",
+          app_version = paste0("RCualiText v", APP_VERSION, " con IA, An\u00e1lisis Sem\u00e1ntico y Red"),
           total_codes = nrow(rv$codigosDF),
           total_highlights = nrow(rv$tabla),
           total_docs = length(rv$docs),
@@ -6025,11 +4618,9 @@ server <- function(input, output, session) {
       }
 
       # Translate evaluation labels for display
-      eval_labels <- c("excellent" = tr("evaluacion.excelente"), "good" = tr("evaluacion.buena"),
-                        "moderate" = tr("evaluacion.moderada"), "low_review" = tr("evaluacion.baja_revisar"))
+      eval_labels <- get_eval_labels(tr)
       datos <- datos %>% mutate(Evaluacion = ifelse(Evaluacion %in% names(eval_labels), eval_labels[Evaluacion], Evaluacion))
-      eval_colors <- stats::setNames(c("#27ae60", "#2ecc71", "#f39c12", "#e74c3c"),
-                                     c(tr("evaluacion.excelente"), tr("evaluacion.buena"), tr("evaluacion.moderada"), tr("evaluacion.baja_revisar")))
+      eval_colors <- get_eval_colors(tr)
 
       p <- ggplot(datos, aes(x = reorder(Codigo, Coherencia_Media), y = Coherencia_Media, fill = Evaluacion)) +
         geom_col() +
@@ -6541,9 +5132,7 @@ server <- function(input, output, session) {
     req(rv$semantico_coherencia)
 
     # Translate evaluation labels for display
-    eval_labels <- c("excellent" = tr("evaluacion.excelente"), "good" = tr("evaluacion.buena"),
-                      "moderate" = tr("evaluacion.moderada"), "low_review" = tr("evaluacion.baja_revisar"),
-                      "insufficient" = tr("evaluacion.insuficiente"))
+    eval_labels <- get_eval_labels(tr)
     display_data <- rv$semantico_coherencia %>%
       mutate(Evaluacion = ifelse(Evaluacion %in% names(eval_labels), eval_labels[Evaluacion], Evaluacion))
 
@@ -6582,11 +5171,9 @@ server <- function(input, output, session) {
     }
 
     # Translate evaluation labels for display
-    eval_labels <- c("excellent" = tr("evaluacion.excelente"), "good" = tr("evaluacion.buena"),
-                      "moderate" = tr("evaluacion.moderada"), "low_review" = tr("evaluacion.baja_revisar"))
+    eval_labels <- get_eval_labels(tr)
     datos <- datos %>% mutate(Evaluacion = ifelse(Evaluacion %in% names(eval_labels), eval_labels[Evaluacion], Evaluacion))
-    eval_colors <- stats::setNames(c("#27ae60", "#2ecc71", "#f39c12", "#e74c3c"),
-                                   c(tr("evaluacion.excelente"), tr("evaluacion.buena"), tr("evaluacion.moderada"), tr("evaluacion.baja_revisar")))
+    eval_colors <- get_eval_colors(tr)
 
     ggplot(datos, aes(x = reorder(Codigo, Coherencia_Media), y = Coherencia_Media, fill = Evaluacion)) +
       geom_col() +
@@ -7495,7 +6082,7 @@ server <- function(input, output, session) {
         doc <- doc %>%
           officer::body_add_par("", style = "Normal") %>%
           officer::body_add_par("---", style = "Normal") %>%
-          officer::body_add_par(if(current_lang() == "es") "Generado con RCualiText v2.4 - An\u00e1lisis Cualitativo con IA" else "Generated with RCualiText v2.4 - Qualitative Analysis with AI", style = "Normal")
+          officer::body_add_par(if(current_lang() == "es") paste0("Generado con RCualiText v", APP_VERSION, " - An\u00e1lisis Cualitativo con IA") else paste0("Generated with RCualiText v", APP_VERSION, " - Qualitative Analysis with AI"), style = "Normal")
 
         # Guardar documento
         print(doc, target = file)
