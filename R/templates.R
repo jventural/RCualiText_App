@@ -132,8 +132,10 @@ tpl_apply_template <- function(rv, tpl) {
 }
 
 setup_templates_server <- function(input, output, session, rv) {
-  if (is.null(rv$active_template)) rv$active_template <- NULL
-  if (is.null(rv$template_progress)) rv$template_progress <- character()
+  isolate({
+    if (is.null(rv$active_template)) rv$active_template <- NULL
+    if (is.null(rv$template_progress)) rv$template_progress <- character()
+  })
 
   apply_and_set <- function(tpl) {
     tpl_apply_template(rv, tpl)

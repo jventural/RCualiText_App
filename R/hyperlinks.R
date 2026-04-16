@@ -41,11 +41,13 @@ hyperlinks_tab_ui <- function() {
 }
 
 setup_hyperlinks_server <- function(input, output, session, rv) {
-  if (is.null(rv$hyperlinks)) rv$hyperlinks <- tibble::tibble(
-    id = character(),
-    from_type = character(), from_id = character(),
-    to_type = character(), to_id = character(),
-    note = character(), created = as.POSIXct(character()))
+  isolate({
+    if (is.null(rv$hyperlinks)) rv$hyperlinks <- tibble::tibble(
+      id = character(),
+      from_type = character(), from_id = character(),
+      to_type = character(), to_id = character(),
+      note = character(), created = as.POSIXct(character()))
+  })
 
   # Populate choices dynamically
   get_ids <- function(type) {

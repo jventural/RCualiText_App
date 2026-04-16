@@ -73,19 +73,18 @@ collab_tab_ui <- function() {
 }
 
 setup_collab_server <- function(input, output, session, rv) {
-  # --- reactive state ---
-  if (is.null(rv$coders)) rv$coders <- tibble::tibble(
-    Coder = character(), Role = character(),
-    JoinedAt = as.POSIXct(character()))
-  if (is.null(rv$locks)) rv$locks <- tibble::tibble(
-    Archivo = character(), Coder = character(),
-    LockedAt = as.POSIXct(character()))
-  if (is.null(rv$assignments)) rv$assignments <- tibble::tibble(
-    Archivo = character(), Coder = character())
-  if (is.null(rv$active_coder)) rv$active_coder <- NA_character_
-
-  # ensure tabla has Coder column
-  observe({
+  # --- reactive state (isolate for non-reactive init) ---
+  isolate({
+    if (is.null(rv$coders)) rv$coders <- tibble::tibble(
+      Coder = character(), Role = character(),
+      JoinedAt = as.POSIXct(character()))
+    if (is.null(rv$locks)) rv$locks <- tibble::tibble(
+      Archivo = character(), Coder = character(),
+      LockedAt = as.POSIXct(character()))
+    if (is.null(rv$assignments)) rv$assignments <- tibble::tibble(
+      Archivo = character(), Coder = character())
+    if (is.null(rv$active_coder)) rv$active_coder <- NA_character_
+    # ensure tabla has Coder column (one-time init)
     if (!"Coder" %in% names(rv$tabla)) {
       rv$tabla$Coder <- NA_character_
     }
