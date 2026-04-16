@@ -23,3 +23,7 @@ service-account*.json
 credentials*.json
 .env
 .env.*
+
+# rsconnect-python artifacts (no aplica a app R)
+requirements.txt
+rsconnect-python/
