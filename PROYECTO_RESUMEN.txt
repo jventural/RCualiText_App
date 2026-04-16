@@ -1,0 +1,154 @@
+================================================================================
+RESUMEN DEL PROYECTO RCualiText - Historial de Desarrollo con Claude
+Última actualización: 8 de febrero de 2026
+================================================================================
+
+1. QUÉ ES RCualiText
+================================================================================
+Aplicación web de código abierto en R/Shiny para análisis cualitativo de textos.
+Permite cargar documentos (.txt/.docx), codificar fragmentos, crear categorías,
+visualizar frecuencias, redes de coocurrencia, y realizar análisis semántico
+y codificación asistida por IA (GPT-4.1 de OpenAI).
+
+- URL en producción: https://jventural-rcualitext-app.share.connect.posit.cloud/
+- Archivo principal: D:\16_Shinys\RCualiText_App\app.R (~7525 líneas)
+- Desplegado en: Posit Connect Cloud (requiere manifest.json)
+- Autor: Dr. José Ventura-León
+
+2. ESTRUCTURA DEL ARCHIVO app.R (~7525 líneas)
+================================================================================
+LÍNEA   | SECCIÓN
+--------|-----------------------------------------------------------------------
+1-30    | Librerías (shiny, shinydashboard, shinyjs, shinyWidgets, colourpicker,
+        | officer, DT, openxlsx, bslib, shinycssloaders, tidyverse, igraph,
+        | tidygraph, ggraph, patchwork, plotly, httr, jsonlite, readxl,
+        | googlesheets4, digest)
+33-68   | Config registro: Google Sheets ID, service account auth, guardar_registro()
+70-73   | Pipe magrittr
+75-118  | leer_archivo() - lee .txt y .docx
+120-818 | Funciones helper: grabar_coocurrencia, generar_red_coocurrencia,
+        | calcular_coherencia_codigos, call_openai_api, etc.
+820-822 | Config OpenAI: OPENAI_MODEL <- "gpt-4.1"
+824-920 | Traducciones i18n embebidas EN (~500 claves) con sección "login"
+920-1919| Traducciones i18n embebidas ES (~500 claves) con sección "login"
+1922-3690| UI: dashboardPage(skin="black") con:
+        |   - dashboardHeader (título + toggle EN/ES)
+        |   - dashboardSidebar (sidebarMenuOutput dinámico)
+        |   - dashboardBody con:
+        |     · Login overlay (div id="login_overlay", z-index:9999)
+        |     · bs_theme(bootswatch="flatly") + CSS académico
+        |     · 11 tabs (ver sección 4)
+3692-7525| SERVER: i18n, login system, sidebar dinámico, reactiveValues,
+        | codificación, categorías, análisis, IA, reportes, etc.
+
+3. SISTEMA DE LOGIN/REGISTRO (NUEVO - Feb 2026)
+================================================================================
+PATRÓN: Overlay con shinyjs::hide()
+- dashboardPage es SIEMPRE el UI raíz (nunca dentro de renderUI/fluidPage)
+- Login = div(id="login_overlay", position:fixed, z-index:9999) dentro de dashboardBody
+- Cubre toda la pantalla (header+sidebar+body) hasta que el usuario se registra
+- Tras registro exitoso: shinyjs::hide("login_overlay") revela el dashboard
+
+DATOS QUE RECOGE:
+- Nombre completo
+- Correo electrónico
+- Universidad / Institución
+- Lugar de residencia
+
+ALMACENAMIENTO: Google Sheets
+- Sheet ID: 16Zz3wYL-OZ7r2y5sfxz-rgA1mF3MT37yavZgnLaZM7Y
+- Nombre del Sheet: "RCualiText_Registro"
+- Service account: savi-sheets-writer@personal-2025-470111.iam.gserviceaccount.com
+- JSON credentials: personal-2025-470111-36843658e199.json (en carpeta del proyecto)
+- Función: guardar_registro() usa googlesheets4::sheet_append()
+- Columnas: fecha_hora, nombre, correo, universidad, residencia
+- Fallback: si falla Google Sheets, datos van a message() (log del servidor)
+
+FLUJO EN SERVER (líneas 3722-3878):
+1. output$login_form_ui <- renderUI({...}) - formulario traducible con tr()
+2. output$show_registro_error / registro_error_text - mensajes de error
+3. observeEvent(input$btn_registro) - valida campos, guarda en GSheets, hide overlay
+4. Toggle idioma en login: input$login_lang_toggle (separado del lang_toggle del dashboard)
+
+TRADUCCIONES LOGIN (claves "login.*"):
+- login.titulo, login.subtitulo, login.descripcion
+- login.nombre, login.correo, login.universidad, login.residencia
+- login.boton
+- login.error_nombre, login.error_correo, login.error_universidad, login.error_residencia
+
+IMPORTANTE - NO FUNCIONA ASÍ:
+- NO usar fluidPage + renderUI que devuelve dashboardPage → sale en blanco
+- NO usar renderUI condicional (if registrado() dashboardPage else login) → AdminLTE no carga
+
+4. PESTAÑAS DEL DASHBOARD (11 tabs)
+================================================================================
+tabName             | Descripción
+--------------------|-----------------------------------------------------------
+texto               | Documento: cargar .txt/.docx, visor, selección, codificar
+codigos             | Códigos: gestión, colores, frecuencias
+categorias          | Categorías: agrupar códigos, jerarquía
+resaltes            | Extractos: fragmentos codificados, filtrar, exportar
+analisis            | Análisis: frecuencias, coocurrencia, gráficos
+analisis_ia         | Análisis IA: codificación automática con GPT-4.1 (API key)
+analisis_semantico  | Análisis Semántico: embeddings, clustering, red semántica
+reporte_ia          | Reporte IA: generación automática de reporte con GPT-4.1
+estado              | Proyecto: guardar/cargar estado (.rds)
+citar               | Citar: referencia bibliográfica de RCualiText
+info                | Ayuda: instrucciones de uso
+
+5. SISTEMA i18n (INTERNACIONALIZACIÓN EN/ES)
+================================================================================
+- reactiveVal("en") como estado global (current_lang)
+- Función tr(key, ...) con claves dot-notation: tr("sidebar.documento")
+- Interpolación: tr("notifications.codigo_anadido", code = "Alegría")
+- ~600 pares clave-valor en ~20 namespaces
+- Traducciones embebidas en app.R con r"--(JSON)--" (raw strings R 4.0+)
+- Caracteres españoles como Unicode escapes (\u00f3 para ó, etc.)
+- Toggle EN/ES: materialSwitch en header (value=FALSE→EN, TRUE→ES)
+- Sidebar dinámico: sidebarMenuOutput + renderMenu con tr()
+- DataTables: dt_language() traduce search, pagination, etc.
+
+6. ESTRUCTURA DEL REPOSITORIO
+================================================================================
+D:\16_Shinys\RCualiText_App\
+├── app.R                                        (~316 KB, ~7525 líneas)
+├── manifest.json                                (dependencias R para Posit Connect)
+├── personal-2025-470111-36843658e199.json       (Google service account credentials)
+├── README.md                                    (descripción, acceso, citación)
+├── .gitignore                                   (.RData, .Rhistory, .Rproj.user)
+├── RCualiText_App.Rproj                         (proyecto RStudio)
+├── PROYECTO_RESUMEN.txt                         (este archivo)
+└── examples/
+    ├── Entrevista_01.txt
+    ├── Entrevista_02.txt
+    ├── Entrevista_03.txt
+    └── diccionario_codigos.xlsx
+
+7. DEPLOY EN POSIT CONNECT CLOUD
+================================================================================
+REQUISITOS:
+- manifest.json generado con: rsconnect::writeManifest(appDir = '.')
+- Regenerar manifest.json cada vez que se agregue/cambie una librería
+- personal-2025-470111-36843658e199.json debe estar en el repo (no en .gitignore)
+- El Sheet de Google debe estar compartido con el service account email
+
+PROBLEMA RESUELTO (translations.json):
+- translations.json externo no se subía al servidor → "lexical error"
+- Solución: embeber JSON en app.R con raw strings r"--(...)--"
+
+PROBLEMA RESUELTO (manifest.json):
+- Sin manifest.json: "A manifest.json file specifying R dependencies is required"
+- Solución: rsconnect::writeManifest(appDir = '.')
+
+8. NOTAS TÉCNICAS
+================================================================================
+- R 4.4.1: C:\Program Files\R\R-4.4.1
+- Windows con locale español (mensajes de error en español)
+- Git Bash como shell (no cmd.exe) - rutas Unix con /c/
+- En Bash: NO escapar $ en expresiones R (usar e[['message']])
+- OpenAI API: GPT-4.1, API key del usuario (no embebida)
+- Google Sheets: googlesheets4 + gargle + service account JSON
+- shinyWidgets duplicado en líneas 9 y 16 (redundante, no causa error)
+- lubridate::show() enmascara shinyjs::show() pero no hay conflicto real
+- shiny.maxRequestSize = 50MB
+================================================================================

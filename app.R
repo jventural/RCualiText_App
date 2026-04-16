@@ -27,6 +27,28 @@ library(readxl)
 library(googlesheets4)
 # para análisis semántico
 library(digest)  # Para cache hash
+# para nuevas funcionalidades
+library(pdftools)
+library(wordcloud2)
+library(tidytext)
+library(stopwords)
+library(rhandsontable)
+# para mejoras (visNetwork, base64enc, markdown). Si no están instaladas, los tabs que las usan muestran error.
+
+# Librerías opcionales (las funciones que las usan verifican disponibilidad con requireNamespace)
+# Si no están instaladas, la app sigue funcionando; solo las features que dependen de ellas mostrarán error al usarlas
+optional_libs <- c("xml2", "topicmodels", "textstem",
+                   "visNetwork", "base64enc", "markdown",
+                   "DBI", "RSQLite", "text2vec", "tesseract", "QCA")
+for (lib in optional_libs) {
+  tryCatch(
+    suppressPackageStartupMessages(library(lib, character.only = TRUE)),
+    error = function(e) {
+      message("Paquete opcional no disponible: ", lib,
+              " - las funcionalidades que lo requieren estarán deshabilitadas")
+    }
+  )
+}
 options(shiny.maxRequestSize = 50 * 1024^2)
 
 # ========================================
@@ -36,17 +58,60 @@ source("R/utils.R")
 source("R/api.R")
 source("R/analysis.R")
 source("R/plots.R")
+source("R/text_analysis.R")
+source("R/codebook.R")
+source("R/refi_qda.R")
+source("R/reliability.R")
+source("R/topic_modeling.R")
+source("R/text_processing.R")
+
+# --- Nuevos módulos de mejoras (multimedia, colaboración, query, viz, etc.) ---
+source("R/multimedia.R")
+source("R/collaboration.R")
+source("R/query_tool.R")
+source("R/viz_extra.R")
+source("R/hyperlinks.R")
+source("R/versioning.R")
+source("R/performance.R")
+source("R/mixed_stats.R")
+source("R/templates.R")
+source("R/ux_enhance.R")
 
 # ========================================
 # Configuración de registro de usuarios (Google Sheets)
 # ========================================
-google_sheets_id <- "16Zz3wYL-OZ7r2y5sfxz-rgA1mF3MT37yavZgnLaZM7Y"
-google_credentials_json <- "personal-2025-470111-36843658e199.json"
+# Sheet ID es público (no es secreto, solo el service account puede escribir)
+google_sheets_id <- Sys.getenv("GOOGLE_SHEETS_ID",
+                               "16Zz3wYL-OZ7r2y5sfxz-rgA1mF3MT37yavZgnLaZM7Y")
+
+# Resolver credenciales: (1) variable de entorno con JSON completo,
+# (2) variable de entorno con ruta a archivo, (3) archivo local para desarrollo
+resolver_google_creds <- function() {
+  sa_json <- Sys.getenv("GOOGLE_SA_JSON", "")
+  if (nchar(sa_json) > 10) {
+    tmp <- tempfile(fileext = ".json")
+    writeLines(sa_json, tmp)
+    return(tmp)
+  }
+  sa_path <- Sys.getenv("GOOGLE_SA_PATH", "")
+  if (nchar(sa_path) > 0 && file.exists(sa_path)) return(sa_path)
+  # Fallback local (no se subira a git; cubierto por .gitignore)
+  local_candidates <- list.files(".", pattern = "^personal-.*\\.json$",
+                                 full.names = TRUE)
+  if (length(local_candidates) > 0) return(local_candidates[1])
+  NA_character_
+}
+google_credentials_json <- resolver_google_creds()
 
 # Autenticación con service account
 tryCatch({
-  googlesheets4::gs4_auth(path = google_credentials_json)
-  message("Google Sheets autenticado correctamente")
+  if (is.na(google_credentials_json)) {
+    message("Google Sheets: no se encontraron credenciales (registro de usuarios deshabilitado)")
+    googlesheets4::gs4_deauth()
+  } else {
+    googlesheets4::gs4_auth(path = google_credentials_json)
+    message("Google Sheets autenticado correctamente")
+  }
 }, error = function(e) {
   message("Error autenticando Google Sheets: ", e[["message"]])
   googlesheets4::gs4_deauth()
@@ -96,7 +161,25 @@ translations <- jsonlite::fromJSON(r"--(
       "reporte_ia": "AI Report",
       "proyecto": "Project",
       "citar": "Cite",
-      "ayuda": "Help"
+      "ayuda": "Help",
+      "memos": "Memos",
+      "exploracion": "Text Exploration",
+      "descriptores": "Descriptors",
+      "matricial": "Matrix Analysis",
+      "quotations": "Quotations",
+      "codebook": "Codebook",
+      "reliability": "Reliability",
+      "topic_modeling": "Topic Modeling",
+      "sentiment": "Sentiment",
+      "ner": "Entities (NER)",
+      "grupos": "Groups",
+      "audit": "Audit Trail",
+      "bookmarks": "Bookmarks",
+      "research_q": "Research Questions",
+      "bloque_preparacion": "Preparation",
+      "bloque_codificacion": "Coding",
+      "bloque_analisis": "Analysis",
+      "bloque_salida": "Output"
     },
     "documento": {
       "panel_control": "Control Panel",
@@ -604,6 +687,198 @@ translations <- jsonlite::fromJSON(r"--(
       "boton": "Enter Application",
       "error_nombre": "Please enter your full name",
       "error_correo": "Please enter a valid email"
+    },
+    "memos": {
+      "titulo": "Analytical Memos",
+      "nuevo_memo": "New Memo",
+      "titulo_memo": "Title",
+      "contenido_memo": "Content",
+      "vincular_a": "Link to",
+      "ninguno": "None",
+      "documento_opt": "Document",
+      "codigo_opt": "Code",
+      "guardar_memo": "Save Memo",
+      "eliminar_memo": "Delete",
+      "lista_memos": "Memo List",
+      "sin_memos": "No memos created yet",
+      "memo_guardado": "Memo saved",
+      "memo_eliminado": "Memo deleted",
+      "vinculo": "Link",
+      "fecha": "Date",
+      "buscar_memos": "Search memos..."
+    },
+    "exploracion": {
+      "nube_palabras": "Word Cloud",
+      "frecuencia_palabras": "Word Frequency",
+      "kwic_titulo": "KWIC (Keyword in Context)",
+      "idioma_texto": "Text language",
+      "min_frecuencia": "Minimum frequency",
+      "max_palabras": "Max words",
+      "stopwords_custom": "Custom stop words (comma-separated)",
+      "generar_nube": "Generate",
+      "palabra_clave": "Keyword",
+      "ventana_contexto": "Context window (words)",
+      "buscar_kwic": "Search",
+      "contexto_izq": "Left Context",
+      "keyword_col": "Keyword",
+      "contexto_der": "Right Context",
+      "documento_col": "Document",
+      "posicion": "Position",
+      "sin_documentos": "Load documents first",
+      "sin_resultados_kwic": "No results found",
+      "frecuencia_col": "Frequency",
+      "palabra_col": "Word",
+      "descargar_frecuencias": "Download Frequencies"
+    },
+    "descriptores": {
+      "titulo": "Document Descriptors",
+      "descripcion": "Add demographic or contextual variables to each document for filtering and cross-analysis.",
+      "agregar_variable": "Add Variable",
+      "nombre_variable": "Variable name",
+      "agregar": "Add",
+      "eliminar_variable": "Remove Variable",
+      "guardar_descriptores": "Save Descriptors",
+      "descriptores_guardados": "Descriptors saved",
+      "sin_documentos": "Load documents first",
+      "variable_agregada": "Variable '{var}' added",
+      "variable_eliminada": "Variable '{var}' removed"
+    },
+    "matricial": {
+      "titulo": "Matrix Analysis",
+      "matrix_coding": "Matrix Coding Query",
+      "matrix_desc": "Cross-tabulation of codes by documents",
+      "generar_matrix": "Generate Matrix",
+      "codigos_x_docs": "Codes x Documents",
+      "codigos_x_codigos": "Codes x Codes (Co-occurrence)",
+      "framework": "Framework Matrix",
+      "framework_desc": "Cases (documents) x Themes (codes) with extracts",
+      "generar_framework": "Generate Framework",
+      "tipo_matrix": "Matrix type",
+      "descargar_excel": "Download Excel",
+      "sin_datos": "No coded data available",
+      "celda_vacia": "(empty)"
+    },
+    "ponderacion": {
+      "peso": "Weight",
+      "peso_help": "Intensity (1-5, optional)"
+    },
+    "jerarquia": {
+      "codigo_padre": "Parent Code",
+      "sin_padre": "(none)",
+      "nivel": "Level"
+    },
+    "quotations": {
+      "titulo": "Quotation Manager",
+      "descripcion": "All coded fragments in one place",
+      "filtrar_codigo": "Filter by code",
+      "filtrar_doc": "Filter by document",
+      "filtrar_peso": "Min weight",
+      "exportar": "Export All",
+      "total": "Total quotations"
+    },
+    "codebook_ops": {
+      "merge_split": "Merge / Split Codes",
+      "merge_desc": "Combine two codes into one",
+      "split_desc": "Split a code based on selected fragments",
+      "codigo_origen": "Source code",
+      "codigo_destino": "Target code",
+      "ejecutar_merge": "Merge",
+      "nuevo_codigo": "New code name",
+      "nuevo_color": "New code color",
+      "seleccionar_frags": "Select fragments to split",
+      "ejecutar_split": "Split",
+      "export_codebook": "Export Codebook",
+      "export_docx": "Download DOCX",
+      "export_xlsx": "Download XLSX",
+      "export_refi": "Export REFI-QDA",
+      "sugerir_codigos": "Suggest Codebook (AI)",
+      "sugerencias_aplicar": "Apply Suggestions"
+    },
+    "reliability": {
+      "titulo": "Intercoder Reliability",
+      "descripcion": "Compare coding between two coders",
+      "cargar_coder2": "Upload second coder's project (.rds)",
+      "calcular": "Calculate Reliability",
+      "kappa_cohen": "Cohen's Kappa",
+      "kappa_bp": "Brennan-Prediger Kappa",
+      "acuerdo": "Percent Agreement",
+      "interpretacion": "Interpretation",
+      "matriz_confusion": "Confusion Matrix",
+      "n_fragmentos": "Fragments compared"
+    },
+    "topic_modeling": {
+      "titulo": "Topic Modeling (LDA)",
+      "descripcion": "Discover latent topics in the corpus",
+      "n_topicos": "Number of topics",
+      "generar": "Generate Topics",
+      "top_terms": "Top terms per topic",
+      "doc_topics": "Document-topic probabilities"
+    },
+    "sentiment": {
+      "titulo": "Sentiment Analysis (LLM)",
+      "descripcion": "Analyze sentiment of coded fragments using GPT",
+      "analizar": "Analyze Sentiment",
+      "fragmento": "Fragment",
+      "sentimiento": "Sentiment",
+      "intensidad": "Intensity",
+      "justificacion": "Justification",
+      "sin_datos": "No coded fragments to analyze"
+    },
+    "ner": {
+      "titulo": "Named Entity Recognition (LLM)",
+      "descripcion": "Extract persons, locations, organizations from documents",
+      "extraer": "Extract Entities",
+      "entidad": "Entity",
+      "tipo": "Type",
+      "sin_docs": "No documents loaded"
+    },
+    "grupos": {
+      "titulo": "Groups",
+      "code_groups": "Code Groups",
+      "doc_groups": "Document Groups",
+      "nuevo_grupo": "New group name",
+      "miembros": "Members",
+      "crear_grupo": "Create Group",
+      "eliminar_grupo": "Delete Group",
+      "lista_grupos": "Group List"
+    },
+    "audit": {
+      "titulo": "Audit Trail",
+      "descripcion": "Chronological record of all changes",
+      "timestamp": "Timestamp",
+      "accion": "Action",
+      "detalle": "Detail",
+      "usuario": "User",
+      "exportar": "Export Log",
+      "limpiar": "Clear Log"
+    },
+    "bookmarks": {
+      "titulo": "Bookmarks",
+      "marcar": "Bookmark",
+      "desmarcar": "Unbookmark",
+      "ver_marcados": "View Bookmarked",
+      "sin_marcados": "No bookmarks yet"
+    },
+    "research_q": {
+      "titulo": "Research Questions",
+      "nueva_pregunta": "New question",
+      "vincular_codigos": "Link to codes",
+      "guardar": "Save Question",
+      "eliminar": "Delete",
+      "lista": "Question List"
+    },
+    "regex": {
+      "titulo": "Regex Search",
+      "patron": "Pattern",
+      "ignore_case": "Ignore case",
+      "buscar": "Search",
+      "match": "Match",
+      "resultados": "Results"
+    },
+    "autosave": {
+      "activado": "Auto-save enabled",
+      "cada_min": "every {min} min",
+      "ultimo": "Last save: {time}"
     }
   },
   "es": {
@@ -618,7 +893,25 @@ translations <- jsonlite::fromJSON(r"--(
       "reporte_ia": "Reporte con IA",
       "proyecto": "Proyecto",
       "citar": "Citar",
-      "ayuda": "Ayuda"
+      "ayuda": "Ayuda",
+      "memos": "Memos",
+      "exploracion": "Exploraci\u00f3n Textual",
+      "descriptores": "Descriptores",
+      "matricial": "An\u00e1lisis Matricial",
+      "quotations": "Citas",
+      "codebook": "Libro de C\u00f3digos",
+      "reliability": "Fiabilidad",
+      "topic_modeling": "Modelado de T\u00f3picos",
+      "sentiment": "Sentimiento",
+      "ner": "Entidades (NER)",
+      "grupos": "Grupos",
+      "audit": "Historial",
+      "bookmarks": "Marcadores",
+      "research_q": "Preguntas de Investigaci\u00f3n",
+      "bloque_preparacion": "Preparaci\u00f3n",
+      "bloque_codificacion": "Codificaci\u00f3n",
+      "bloque_analisis": "An\u00e1lisis",
+      "bloque_salida": "Salida"
     },
     "documento": {
       "panel_control": "Panel de Control",
@@ -1126,6 +1419,198 @@ translations <- jsonlite::fromJSON(r"--(
       "boton": "Ingresar a la Aplicaci\u00f3n",
       "error_nombre": "Por favor ingrese su nombre completo",
       "error_correo": "Por favor ingrese un correo v\u00e1lido"
+    },
+    "memos": {
+      "titulo": "Memos Anal\u00edticos",
+      "nuevo_memo": "Nuevo Memo",
+      "titulo_memo": "T\u00edtulo",
+      "contenido_memo": "Contenido",
+      "vincular_a": "Vincular a",
+      "ninguno": "Ninguno",
+      "documento_opt": "Documento",
+      "codigo_opt": "C\u00f3digo",
+      "guardar_memo": "Guardar Memo",
+      "eliminar_memo": "Eliminar",
+      "lista_memos": "Lista de Memos",
+      "sin_memos": "No hay memos creados",
+      "memo_guardado": "Memo guardado",
+      "memo_eliminado": "Memo eliminado",
+      "vinculo": "V\u00ednculo",
+      "fecha": "Fecha",
+      "buscar_memos": "Buscar memos..."
+    },
+    "exploracion": {
+      "nube_palabras": "Nube de Palabras",
+      "frecuencia_palabras": "Frecuencia de Palabras",
+      "kwic_titulo": "KWIC (Palabra en Contexto)",
+      "idioma_texto": "Idioma del texto",
+      "min_frecuencia": "Frecuencia m\u00ednima",
+      "max_palabras": "M\u00e1ximo de palabras",
+      "stopwords_custom": "Stop words adicionales (separadas por coma)",
+      "generar_nube": "Generar",
+      "palabra_clave": "Palabra clave",
+      "ventana_contexto": "Ventana de contexto (palabras)",
+      "buscar_kwic": "Buscar",
+      "contexto_izq": "Contexto Izquierdo",
+      "keyword_col": "Palabra",
+      "contexto_der": "Contexto Derecho",
+      "documento_col": "Documento",
+      "posicion": "Posici\u00f3n",
+      "sin_documentos": "Carga documentos primero",
+      "sin_resultados_kwic": "No se encontraron resultados",
+      "frecuencia_col": "Frecuencia",
+      "palabra_col": "Palabra",
+      "descargar_frecuencias": "Descargar Frecuencias"
+    },
+    "descriptores": {
+      "titulo": "Descriptores de Documentos",
+      "descripcion": "Agrega variables demogr\u00e1ficas o contextuales a cada documento para filtrar y cruzar con los an\u00e1lisis.",
+      "agregar_variable": "Agregar Variable",
+      "nombre_variable": "Nombre de la variable",
+      "agregar": "Agregar",
+      "eliminar_variable": "Eliminar Variable",
+      "guardar_descriptores": "Guardar Descriptores",
+      "descriptores_guardados": "Descriptores guardados",
+      "sin_documentos": "Carga documentos primero",
+      "variable_agregada": "Variable '{var}' agregada",
+      "variable_eliminada": "Variable '{var}' eliminada"
+    },
+    "matricial": {
+      "titulo": "An\u00e1lisis Matricial",
+      "matrix_coding": "Consulta de Codificaci\u00f3n Matricial",
+      "matrix_desc": "Tabulaci\u00f3n cruzada de c\u00f3digos por documentos",
+      "generar_matrix": "Generar Matriz",
+      "codigos_x_docs": "C\u00f3digos x Documentos",
+      "codigos_x_codigos": "C\u00f3digos x C\u00f3digos (Co-ocurrencia)",
+      "framework": "Matriz de Marco",
+      "framework_desc": "Casos (documentos) x Temas (c\u00f3digos) con extractos",
+      "generar_framework": "Generar Marco",
+      "tipo_matrix": "Tipo de matriz",
+      "descargar_excel": "Descargar Excel",
+      "sin_datos": "No hay datos codificados",
+      "celda_vacia": "(vac\u00edo)"
+    },
+    "ponderacion": {
+      "peso": "Peso",
+      "peso_help": "Intensidad (1-5, opcional)"
+    },
+    "jerarquia": {
+      "codigo_padre": "C\u00f3digo Padre",
+      "sin_padre": "(ninguno)",
+      "nivel": "Nivel"
+    },
+    "quotations": {
+      "titulo": "Gestor de Citas",
+      "descripcion": "Todos los fragmentos codificados en un solo lugar",
+      "filtrar_codigo": "Filtrar por c\u00f3digo",
+      "filtrar_doc": "Filtrar por documento",
+      "filtrar_peso": "Peso m\u00ednimo",
+      "exportar": "Exportar Todo",
+      "total": "Total de citas"
+    },
+    "codebook_ops": {
+      "merge_split": "Fusionar / Dividir C\u00f3digos",
+      "merge_desc": "Combinar dos c\u00f3digos en uno",
+      "split_desc": "Dividir un c\u00f3digo seg\u00fan fragmentos seleccionados",
+      "codigo_origen": "C\u00f3digo origen",
+      "codigo_destino": "C\u00f3digo destino",
+      "ejecutar_merge": "Fusionar",
+      "nuevo_codigo": "Nombre del nuevo c\u00f3digo",
+      "nuevo_color": "Color del nuevo c\u00f3digo",
+      "seleccionar_frags": "Selecciona fragmentos para dividir",
+      "ejecutar_split": "Dividir",
+      "export_codebook": "Exportar Libro de C\u00f3digos",
+      "export_docx": "Descargar DOCX",
+      "export_xlsx": "Descargar XLSX",
+      "export_refi": "Exportar REFI-QDA",
+      "sugerir_codigos": "Sugerir C\u00f3digos (IA)",
+      "sugerencias_aplicar": "Aplicar Sugerencias"
+    },
+    "reliability": {
+      "titulo": "Fiabilidad Intercodificador",
+      "descripcion": "Comparar codificaci\u00f3n entre dos codificadores",
+      "cargar_coder2": "Cargar proyecto del segundo codificador (.rds)",
+      "calcular": "Calcular Fiabilidad",
+      "kappa_cohen": "Kappa de Cohen",
+      "kappa_bp": "Kappa de Brennan-Prediger",
+      "acuerdo": "Acuerdo Porcentual",
+      "interpretacion": "Interpretaci\u00f3n",
+      "matriz_confusion": "Matriz de Confusi\u00f3n",
+      "n_fragmentos": "Fragmentos comparados"
+    },
+    "topic_modeling": {
+      "titulo": "Modelado de T\u00f3picos (LDA)",
+      "descripcion": "Descubre t\u00f3picos latentes en el corpus",
+      "n_topicos": "N\u00famero de t\u00f3picos",
+      "generar": "Generar T\u00f3picos",
+      "top_terms": "T\u00e9rminos principales por t\u00f3pico",
+      "doc_topics": "Probabilidades documento-t\u00f3pico"
+    },
+    "sentiment": {
+      "titulo": "An\u00e1lisis de Sentimiento (LLM)",
+      "descripcion": "Analiza el sentimiento de fragmentos codificados con GPT",
+      "analizar": "Analizar Sentimiento",
+      "fragmento": "Fragmento",
+      "sentimiento": "Sentimiento",
+      "intensidad": "Intensidad",
+      "justificacion": "Justificaci\u00f3n",
+      "sin_datos": "No hay fragmentos codificados"
+    },
+    "ner": {
+      "titulo": "Reconocimiento de Entidades (LLM)",
+      "descripcion": "Extraer personas, lugares, organizaciones de los documentos",
+      "extraer": "Extraer Entidades",
+      "entidad": "Entidad",
+      "tipo": "Tipo",
+      "sin_docs": "No hay documentos cargados"
+    },
+    "grupos": {
+      "titulo": "Grupos",
+      "code_groups": "Grupos de C\u00f3digos",
+      "doc_groups": "Grupos de Documentos",
+      "nuevo_grupo": "Nombre del grupo",
+      "miembros": "Miembros",
+      "crear_grupo": "Crear Grupo",
+      "eliminar_grupo": "Eliminar Grupo",
+      "lista_grupos": "Lista de Grupos"
+    },
+    "audit": {
+      "titulo": "Historial de Auditor\u00eda",
+      "descripcion": "Registro cronol\u00f3gico de todos los cambios",
+      "timestamp": "Fecha/Hora",
+      "accion": "Acci\u00f3n",
+      "detalle": "Detalle",
+      "usuario": "Usuario",
+      "exportar": "Exportar Log",
+      "limpiar": "Limpiar Log"
+    },
+    "bookmarks": {
+      "titulo": "Marcadores",
+      "marcar": "Marcar",
+      "desmarcar": "Desmarcar",
+      "ver_marcados": "Ver Marcados",
+      "sin_marcados": "Sin marcadores"
+    },
+    "research_q": {
+      "titulo": "Preguntas de Investigaci\u00f3n",
+      "nueva_pregunta": "Nueva pregunta",
+      "vincular_codigos": "Vincular a c\u00f3digos",
+      "guardar": "Guardar Pregunta",
+      "eliminar": "Eliminar",
+      "lista": "Lista de Preguntas"
+    },
+    "regex": {
+      "titulo": "B\u00fasqueda Regex",
+      "patron": "Patr\u00f3n",
+      "ignore_case": "Ignorar may\u00fasculas",
+      "buscar": "Buscar",
+      "match": "Coincidencia",
+      "resultados": "Resultados"
+    },
+    "autosave": {
+      "activado": "Auto-guardado activado",
+      "cada_min": "cada {min} min",
+      "ultimo": "\u00daltimo guardado: {time}"
     }
   }
 }
@@ -1143,6 +1628,9 @@ ui <- dashboardPage(
       "RCualiText"
     ),
     titleWidth = 280,
+    tags$li(class = "dropdown",
+      uiOutput("indicador_cambios", container = function(...) div(style = "padding: 10px 15px;", ...))
+    ),
     tags$li(class = "dropdown",
       div(style = "padding: 10px 15px; display: flex; align-items: center; gap: 8px;",
         materialSwitch(inputId = "lang_toggle", label = "EN/ES", value = FALSE, status = "primary")
@@ -1237,6 +1725,12 @@ ui <- dashboardPage(
         toggleDeselectMode(active);
       });
     ")),
+
+    # --- Scripts para mejoras Pro ---
+    tags$script(HTML(mm_js_handler)),
+    tags$script(HTML(ux_shortcut_js)),
+    tags$style(HTML(ux_dark_css)),
+
     tabItems(
       # ---- Texto (diseño mejorado) ----
       tabItem("texto",
@@ -1250,7 +1744,7 @@ ui <- dashboardPage(
                   fileInput("archivo",
                             div(icon("upload"), span(id = "lbl_cargar_docs", " Upload Documents")),
                             multiple = TRUE,
-                            accept = c(".txt", ".docx"),
+                            accept = c(".txt", ".docx", ".doc", ".pdf"),
                             buttonLabel = "Browse...",
                             placeholder = "No file selected"),
 
@@ -1284,7 +1778,12 @@ ui <- dashboardPage(
                                       value = TRUE),
                         helpText(span(id = "help_modo_acumulativo", "Allows applying multiple codes to the same fragment"),
                                  style = "color: #7f8c8d; font-size: 12px;")
-                      )
+                      ),
+                    numericInput("pesoFragmento",
+                                div(icon("weight-hanging"), span(id = "lbl_peso", " Weight")),
+                                value = NA, min = 1, max = 5, step = 1),
+                    helpText(span(id = "help_peso", "Intensity (1-5, optional)"),
+                             style = "color: #7f8c8d; font-size: 11px;")
                     )
                   ),
 
@@ -1368,16 +1867,19 @@ ui <- dashboardPage(
                     div(
                       style = "margin: 20px 0;",
                       h5(icon("palette"), span(id = "h_color_codigo", " Code Color"), style = "color: #2c3e50; margin-bottom: 10px;"),
-                      colourInput("new_color", 
-                                  label = NULL, 
+                      colourInput("new_color",
+                                  label = NULL,
                                   value = "#3498db",
                                   palette = "limited",
-                                  allowedCols = c("#e74c3c", "#3498db", "#2ecc71", "#f39c12", 
+                                  allowedCols = c("#e74c3c", "#3498db", "#2ecc71", "#f39c12",
                                                   "#9b59b6", "#1abc9c", "#34495e", "#e67e22",
                                                   "#f1c40f", "#c0392b", "#8e44ad", "#16a085",
                                                   "#2c3e50", "#d35400", "#27ae60"))
                     ),
-                    
+                    selectInput("parent_codigo",
+                                div(icon("sitemap"), span(id = "lbl_parent_code", " Parent Code")),
+                                choices = c("(none)" = ""), selected = ""),
+
                     div(
                       style = "display: flex; gap: 10px; margin-top: 25px;",
                       actionButton("addOrUpdateCodigo",
@@ -1525,6 +2027,16 @@ ui <- dashboardPage(
                                  value = TRUE,
                                  status = "primary",
                                  fill = TRUE)
+                  ),
+
+                  # Descriptor filters
+                  div(
+                    class = "info-panel",
+                    style = "margin-top: 15px;",
+                    h5(icon("filter"), span(id = "h_filtros_desc", " Filters"), style = "color: #2c3e50; margin-bottom: 10px;"),
+                    uiOutput("filtros_descriptores_ui"),
+                    helpText(span(id = "help_filtros_desc", "Filter analysis by descriptor values"),
+                             style = "color: #7f8c8d; font-size: 11px;")
                   ),
 
                   # Controles de descarga personalizados
@@ -2220,6 +2732,368 @@ ui <- dashboardPage(
               )
       ),
       
+      # ---- Memos ----
+      tabItem("memos",
+              fluidRow(
+                box(
+                  width = 4,
+                  title = span(id = "box_nuevo_memo", "New Memo"),
+                  status = "primary",
+                  solidHeader = TRUE,
+                  textInput("memo_titulo", div(icon("heading"), span(id = "lbl_titulo_memo", " Title")), placeholder = "Memo title"),
+                  textAreaInput("memo_contenido", div(icon("pen"), span(id = "lbl_contenido_memo", " Content")), rows = 8, placeholder = "Write your analytical notes here..."),
+                  selectInput("memo_vinculo_tipo", div(icon("link"), span(id = "lbl_vincular_a", " Link to")),
+                              choices = c("None" = "ninguno", "Document" = "documento", "Code" = "codigo", "Fragment" = "fragmento")),
+                  conditionalPanel(
+                    condition = "input.memo_vinculo_tipo == 'documento'",
+                    uiOutput("memo_doc_selector")
+                  ),
+                  conditionalPanel(
+                    condition = "input.memo_vinculo_tipo == 'codigo'",
+                    uiOutput("memo_code_selector")
+                  ),
+                  conditionalPanel(
+                    condition = "input.memo_vinculo_tipo == 'fragmento'",
+                    uiOutput("memo_frag_selector")
+                  ),
+                  div(
+                    style = "display: flex; gap: 10px; margin-top: 15px;",
+                    actionButton("guardar_memo", div(icon("save"), span(id = "btn_guardar_memo", " Save Memo")), class = "btn-primary btn-sm"),
+                    actionButton("eliminar_memo", div(icon("trash"), span(id = "btn_eliminar_memo", " Delete")), class = "btn-default btn-sm")
+                  )
+                ),
+                box(
+                  width = 8,
+                  title = span(id = "box_lista_memos", "Memo List"),
+                  status = "primary",
+                  solidHeader = TRUE,
+                  DTOutput("tabla_memos") %>% withSpinner(type = 4, color = "#5a6c7d")
+                )
+              )
+      ),
+
+      # ---- Exploración Textual ----
+      tabItem("exploracion",
+              fluidRow(
+                box(
+                  width = 4,
+                  title = span(id = "box_config_exploracion", "Settings"),
+                  status = "primary",
+                  solidHeader = TRUE,
+
+                  h5(icon("cloud"), span(id = "h_nube_palabras", " Word Cloud"), style = "color: #2c3e50; margin-bottom: 15px;"),
+                  selectInput("idioma_stopwords", span(id = "lbl_idioma_texto", "Text language"),
+                              choices = c("English" = "en", "Spanish" = "es", "Portuguese" = "pt", "French" = "fr", "German" = "de"),
+                              selected = "en"),
+                  sliderInput("min_freq_palabras", span(id = "lbl_min_freq", "Minimum frequency"), min = 1, max = 20, value = 2, step = 1),
+                  sliderInput("max_palabras", span(id = "lbl_max_palabras", "Max words"), min = 20, max = 300, value = 100, step = 10),
+                  textInput("custom_stopwords", span(id = "lbl_custom_sw", "Custom stop words"), placeholder = "word1, word2, ..."),
+                  selectInput("wordcloud_scope",
+                              div(icon("filter"), span(id = "lbl_wc_scope", " Scope")),
+                              choices = c("All documents" = "all", "By code" = "code", "By category" = "category")),
+                  conditionalPanel(
+                    condition = "input.wordcloud_scope == 'code'",
+                    uiOutput("wc_code_selector")
+                  ),
+                  conditionalPanel(
+                    condition = "input.wordcloud_scope == 'category'",
+                    uiOutput("wc_cat_selector")
+                  ),
+                  actionButton("btn_generar_nube", div(icon("cloud"), span(id = "btn_generar_nube_lbl", " Generate")), class = "btn-primary btn-block"),
+
+                  hr(),
+
+                  h5(icon("search"), span(id = "h_kwic", " KWIC"), style = "color: #2c3e50; margin-bottom: 15px;"),
+                  textInput("kwic_keyword", span(id = "lbl_palabra_clave", "Keyword"), placeholder = "Enter keyword..."),
+                  sliderInput("kwic_window", span(id = "lbl_ventana", "Context window"), min = 2, max = 15, value = 5, step = 1),
+                  actionButton("btn_kwic", div(icon("search"), span(id = "btn_buscar_kwic", " Search")), class = "btn-primary btn-block")
+                ),
+                box(
+                  width = 8,
+                  title = span(id = "box_resultados_exploracion", "Results"),
+                  status = "primary",
+                  solidHeader = TRUE,
+
+                  tabsetPanel(id = "tab_exploracion",
+                    tabPanel(span(icon("cloud"), " Word Cloud"),
+                      div(style = "margin-top: 15px;",
+                        wordcloud2::wordcloud2Output("plot_wordcloud", height = "400px") %>% withSpinner(type = 4, color = "#5a6c7d")
+                      ),
+                      hr(),
+                      h5(icon("list-ol"), span(id = "h_freq_tabla", " Word Frequency"), style = "color: #2c3e50;"),
+                      DTOutput("tabla_frecuencias") %>% withSpinner(type = 4, color = "#5a6c7d"),
+                      downloadButton("download_frecuencias", div(icon("download"), span(id = "btn_dl_freq", " Download")), class = "btn-primary btn-sm")
+                    ),
+                    tabPanel(span(icon("search"), " KWIC"),
+                      div(style = "margin-top: 15px;",
+                        DTOutput("tabla_kwic") %>% withSpinner(type = 4, color = "#5a6c7d")
+                      )
+                    )
+                  )
+                )
+              )
+      ),
+
+      # ---- Descriptores ----
+      tabItem("descriptores",
+              fluidRow(
+                box(
+                  width = 12,
+                  title = span(id = "box_descriptores", "Document Descriptors"),
+                  status = "primary",
+                  solidHeader = TRUE,
+                  div(
+                    class = "info-panel",
+                    p(span(id = "p_desc_info", "Add demographic or contextual variables to each document for filtering and cross-analysis."),
+                      style = "color: #7f8c8d;")
+                  ),
+                  fluidRow(
+                    column(4,
+                      textInput("nueva_variable", span(id = "lbl_nombre_var", "Variable name"), placeholder = "e.g.: Age group"),
+                      div(
+                        style = "display: flex; gap: 10px;",
+                        actionButton("agregar_variable", div(icon("plus"), span(id = "btn_agregar_var", " Add")), class = "btn-primary btn-sm"),
+                        uiOutput("selector_eliminar_var"),
+                        actionButton("eliminar_variable", div(icon("minus"), span(id = "btn_eliminar_var", " Remove")), class = "btn-default btn-sm")
+                      )
+                    ),
+                    column(8,
+                      actionButton("guardar_descriptores", div(icon("save"), span(id = "btn_guardar_desc", " Save Descriptors")), class = "btn-success btn-sm", style = "margin-bottom: 10px;")
+                    )
+                  ),
+                  rhandsontable::rHandsontableOutput("tabla_descriptores") %>% withSpinner(type = 4, color = "#5a6c7d")
+                )
+              )
+      ),
+
+      # ---- Análisis Matricial ----
+      tabItem("matricial",
+              fluidRow(
+                box(
+                  width = 4,
+                  title = span(id = "box_config_matricial", "Settings"),
+                  status = "primary",
+                  solidHeader = TRUE,
+
+                  h5(icon("th"), span(id = "h_matrix_coding", " Matrix Coding Query"), style = "color: #2c3e50; margin-bottom: 10px;"),
+                  p(span(id = "p_matrix_desc", "Cross-tabulation of codes by documents"), style = "color: #7f8c8d; font-size: 12px;"),
+                  selectInput("tipo_matrix", span(id = "lbl_tipo_matrix", "Matrix type"),
+                              choices = c("Codes x Documents" = "cod_doc", "Codes x Codes" = "cod_cod")),
+                  actionButton("btn_generar_matrix", div(icon("table"), span(id = "btn_gen_matrix", " Generate Matrix")), class = "btn-primary btn-block"),
+                  downloadButton("download_matrix_excel", div(icon("download"), span(id = "btn_dl_matrix", " Download Excel")), class = "btn-default btn-block btn-sm"),
+
+                  hr(),
+
+                  h5(icon("border-all"), span(id = "h_framework", " Framework Matrix"), style = "color: #2c3e50; margin-bottom: 10px;"),
+                  p(span(id = "p_framework_desc", "Cases (documents) x Themes (codes) with extracts"), style = "color: #7f8c8d; font-size: 12px;"),
+                  actionButton("btn_generar_framework", div(icon("border-all"), span(id = "btn_gen_framework", " Generate Framework")), class = "btn-primary btn-block"),
+                  downloadButton("download_framework_excel", div(icon("download"), span(id = "btn_dl_framework", " Download Excel")), class = "btn-default btn-block btn-sm")
+                ),
+                box(
+                  width = 8,
+                  title = span(id = "box_resultados_matricial", "Results"),
+                  status = "primary",
+                  solidHeader = TRUE,
+
+                  tabsetPanel(id = "tab_matricial",
+                    tabPanel(span(icon("th"), " Matrix Coding"),
+                      div(style = "margin-top: 15px;",
+                        DTOutput("tabla_matrix_coding") %>% withSpinner(type = 4, color = "#5a6c7d")
+                      )
+                    ),
+                    tabPanel(span(icon("border-all"), " Framework"),
+                      div(style = "margin-top: 15px;",
+                        DTOutput("tabla_framework") %>% withSpinner(type = 4, color = "#5a6c7d")
+                      )
+                    )
+                  )
+                )
+              )
+      ),
+
+      # ---- Quotation Manager ----
+      tabItem("quotations",
+              fluidRow(
+                box(width = 12, title = span(id = "box_quotations", "Quotation Manager"),
+                    status = "primary", solidHeader = TRUE,
+                    div(class = "info-panel",
+                        p(span(id = "p_quot_desc", "All coded fragments in one place"), style = "color: #7f8c8d;")
+                    ),
+                    fluidRow(
+                      column(3, selectInput("quot_filtro_codigo", span(id = "lbl_filtro_codigo", "Filter by code"), choices = NULL, multiple = TRUE)),
+                      column(3, selectInput("quot_filtro_doc", span(id = "lbl_filtro_doc", "Filter by document"), choices = NULL, multiple = TRUE)),
+                      column(3, numericInput("quot_filtro_peso", span(id = "lbl_filtro_peso", "Min weight"), value = NA, min = 1, max = 5)),
+                      column(3, div(style = "margin-top: 25px;",
+                                    downloadButton("download_quot_excel", div(icon("download"), " Export"), class = "btn-primary btn-sm")))
+                    ),
+                    DTOutput("tabla_quotations") %>% withSpinner(type = 4, color = "#5a6c7d")
+                )
+              )
+      ),
+
+      # ---- Codebook operations ----
+      tabItem("codebook",
+              fluidRow(
+                box(width = 6, title = span(id = "box_merge_split", "Merge / Split Codes"),
+                    status = "primary", solidHeader = TRUE,
+                    h5(icon("object-group"), " Merge"),
+                    selectInput("merge_from", span(id = "lbl_merge_from", "Source code"), choices = NULL),
+                    selectInput("merge_to", span(id = "lbl_merge_to", "Target code"), choices = NULL),
+                    actionButton("btn_merge", div(icon("compress"), span(id = "btn_ejecutar_merge", " Merge")), class = "btn-primary btn-sm"),
+                    hr(),
+                    h5(icon("object-ungroup"), " Split"),
+                    selectInput("split_source", span(id = "lbl_split_source", "Code to split"), choices = NULL),
+                    textInput("split_new_code", span(id = "lbl_nuevo_codigo", "New code name")),
+                    colourpicker::colourInput("split_new_color", span(id = "lbl_nuevo_color", "Color"), value = "#e74c3c"),
+                    uiOutput("split_fragments_ui"),
+                    actionButton("btn_split", div(icon("expand"), span(id = "btn_ejecutar_split", " Split")), class = "btn-primary btn-sm")
+                ),
+                box(width = 6, title = span(id = "box_export_codebook", "Export Codebook"),
+                    status = "primary", solidHeader = TRUE,
+                    p(style = "color: #7f8c8d;", span(id = "p_export_cb_desc", "Download the complete codebook with definitions, colors, and examples")),
+                    downloadButton("download_codebook_docx", div(icon("file-word"), span(id = "btn_export_docx", " Download DOCX")), class = "btn-primary btn-block"),
+                    br(), br(),
+                    downloadButton("download_codebook_xlsx", div(icon("file-excel"), span(id = "btn_export_xlsx", " Download XLSX")), class = "btn-success btn-block"),
+                    br(), br(),
+                    downloadButton("download_refi_qda", div(icon("file-code"), span(id = "btn_export_refi", " Export REFI-QDA")), class = "btn-default btn-block"),
+                    hr(),
+                    h5(icon("robot"), " AI Suggestions"),
+                    actionButton("btn_sugerir_codigos", div(icon("magic"), span(id = "btn_sugerir_codigos_lbl", " Suggest Codebook (AI)")), class = "btn-info btn-block"),
+                    br(),
+                    DTOutput("tabla_sugerencias") %>% withSpinner(type = 4, color = "#5a6c7d"),
+                    actionButton("btn_aplicar_sugerencias", div(icon("check"), span(id = "btn_aplicar_sugerencias_lbl", " Apply Suggestions")), class = "btn-success btn-sm")
+                )
+              )
+      ),
+
+      # ---- Groups (code + document groups) ----
+      tabItem("grupos",
+              fluidRow(
+                box(width = 6, title = span(id = "box_code_groups", "Code Groups"),
+                    status = "primary", solidHeader = TRUE,
+                    textInput("nuevo_code_group", span(id = "lbl_nuevo_grupo_cod", "New group name")),
+                    selectInput("miembros_code_group", span(id = "lbl_miembros_cod", "Members"), choices = NULL, multiple = TRUE),
+                    actionButton("crear_code_group", div(icon("plus"), span(id = "btn_crear_grupo_cod", " Create Group")), class = "btn-primary btn-sm"),
+                    actionButton("eliminar_code_group", div(icon("trash"), span(id = "btn_eliminar_grupo_cod", " Delete")), class = "btn-default btn-sm"),
+                    DTOutput("tabla_code_groups") %>% withSpinner(type = 4, color = "#5a6c7d")
+                ),
+                box(width = 6, title = span(id = "box_doc_groups", "Document Groups"),
+                    status = "primary", solidHeader = TRUE,
+                    textInput("nuevo_doc_group", span(id = "lbl_nuevo_grupo_doc", "New group name")),
+                    selectInput("miembros_doc_group", span(id = "lbl_miembros_doc", "Members"), choices = NULL, multiple = TRUE),
+                    actionButton("crear_doc_group", div(icon("plus"), span(id = "btn_crear_grupo_doc", " Create Group")), class = "btn-primary btn-sm"),
+                    actionButton("eliminar_doc_group", div(icon("trash"), span(id = "btn_eliminar_grupo_doc", " Delete")), class = "btn-default btn-sm"),
+                    DTOutput("tabla_doc_groups") %>% withSpinner(type = 4, color = "#5a6c7d")
+                )
+              )
+      ),
+
+      # ---- Research Questions ----
+      tabItem("research_q",
+              fluidRow(
+                box(width = 12, title = span(id = "box_research_q", "Research Questions"),
+                    status = "primary", solidHeader = TRUE,
+                    textAreaInput("nueva_rq", span(id = "lbl_nueva_rq", "New question"), rows = 3, placeholder = "E.g.: How do participants perceive...?"),
+                    selectInput("rq_codigos", span(id = "lbl_rq_codigos", "Link to codes"), choices = NULL, multiple = TRUE),
+                    div(style = "display: flex; gap: 10px;",
+                        actionButton("guardar_rq", div(icon("save"), span(id = "btn_guardar_rq", " Save Question")), class = "btn-primary btn-sm"),
+                        actionButton("eliminar_rq", div(icon("trash"), span(id = "btn_eliminar_rq", " Delete")), class = "btn-default btn-sm")
+                    ),
+                    hr(),
+                    DTOutput("tabla_rq") %>% withSpinner(type = 4, color = "#5a6c7d")
+                )
+              )
+      ),
+
+      # ---- Topic Modeling ----
+      tabItem("topic_modeling",
+              fluidRow(
+                box(width = 4, title = span(id = "box_topic_config", "Topic Modeling"),
+                    status = "primary", solidHeader = TRUE,
+                    p(span(id = "p_topic_desc", "Discover latent topics using LDA"), style = "color: #7f8c8d;"),
+                    numericInput("n_topicos", span(id = "lbl_n_topicos", "Number of topics"), value = 5, min = 2, max = 20),
+                    selectInput("topic_idioma", span(id = "lbl_topic_idioma", "Language"), choices = c("English" = "en", "Spanish" = "es", "Portuguese" = "pt", "French" = "fr", "German" = "de")),
+                    actionButton("btn_generar_topics", div(icon("lightbulb"), span(id = "btn_generar_topics_lbl", " Generate Topics")), class = "btn-primary btn-block")
+                ),
+                box(width = 8, title = span(id = "box_topic_results", "Results"),
+                    status = "primary", solidHeader = TRUE,
+                    plotOutput("plot_topics", height = "500px") %>% withSpinner(type = 4, color = "#5a6c7d"),
+                    hr(),
+                    DTOutput("tabla_doc_topics") %>% withSpinner(type = 4, color = "#5a6c7d")
+                )
+              )
+      ),
+
+      # ---- Sentiment ----
+      tabItem("sentiment",
+              fluidRow(
+                box(width = 12, title = span(id = "box_sentiment", "Sentiment Analysis"),
+                    status = "primary", solidHeader = TRUE,
+                    div(class = "info-panel",
+                        p(span(id = "p_sentiment_desc", "Analyze sentiment of coded fragments using GPT"), style = "color: #7f8c8d;")
+                    ),
+                    actionButton("btn_analizar_sentiment", div(icon("heart"), span(id = "btn_analizar_sent_lbl", " Analyze Sentiment")), class = "btn-primary"),
+                    hr(),
+                    DTOutput("tabla_sentiment") %>% withSpinner(type = 4, color = "#5a6c7d"),
+                    plotlyOutput("plot_sentiment", height = "300px")
+                )
+              )
+      ),
+
+      # ---- NER ----
+      tabItem("ner",
+              fluidRow(
+                box(width = 12, title = span(id = "box_ner", "Named Entity Recognition"),
+                    status = "primary", solidHeader = TRUE,
+                    div(class = "info-panel",
+                        p(span(id = "p_ner_desc", "Extract persons, locations, organizations using GPT"), style = "color: #7f8c8d;")
+                    ),
+                    actionButton("btn_extraer_ner", div(icon("user-tag"), span(id = "btn_extraer_ner_lbl", " Extract Entities")), class = "btn-primary"),
+                    hr(),
+                    DTOutput("tabla_ner") %>% withSpinner(type = 4, color = "#5a6c7d")
+                )
+              )
+      ),
+
+      # ---- Reliability ----
+      tabItem("reliability",
+              fluidRow(
+                box(width = 4, title = span(id = "box_reliability_config", "Intercoder Reliability"),
+                    status = "primary", solidHeader = TRUE,
+                    div(class = "info-panel",
+                        p(span(id = "p_rel_desc", "Compare coding between two coders"), style = "color: #7f8c8d;")
+                    ),
+                    fileInput("coder2_file", span(id = "lbl_cargar_coder2", "Upload second coder's project (.rds)"), accept = ".rds"),
+                    actionButton("btn_calc_reliability", div(icon("calculator"), span(id = "btn_calcular_rel", " Calculate")), class = "btn-primary btn-block")
+                ),
+                box(width = 8, title = span(id = "box_reliability_results", "Results"),
+                    status = "primary", solidHeader = TRUE,
+                    uiOutput("reliability_summary") %>% withSpinner(type = 4, color = "#5a6c7d"),
+                    hr(),
+                    h5(span(id = "h_matriz_confusion", "Confusion Matrix")),
+                    DTOutput("tabla_confusion")
+                )
+              )
+      ),
+
+      # ---- Audit Trail ----
+      tabItem("audit",
+              fluidRow(
+                box(width = 12, title = span(id = "box_audit", "Audit Trail"),
+                    status = "primary", solidHeader = TRUE,
+                    div(class = "info-panel",
+                        p(span(id = "p_audit_desc", "Chronological record of all changes"), style = "color: #7f8c8d;")
+                    ),
+                    fluidRow(
+                      column(6, downloadButton("download_audit", div(icon("download"), span(id = "btn_export_audit", " Export Log")), class = "btn-primary btn-sm")),
+                      column(6, actionButton("clear_audit", div(icon("trash"), span(id = "btn_limpiar_audit", " Clear Log")), class = "btn-default btn-sm"))
+                    ),
+                    hr(),
+                    DTOutput("tabla_audit") %>% withSpinner(type = 4, color = "#5a6c7d")
+                )
+              )
+      ),
+
       # ---- Info/Ayuda (diseño mejorado) ----
       tabItem("info",
               fluidRow(
@@ -2289,7 +3163,19 @@ ui <- dashboardPage(
                   )
                 )
               )
-      )
+      ),
+
+      # === Mejoras (nivel ATLAS.ti / NVivo) ===
+      multimedia_tab_ui(),
+      collab_tab_ui(),
+      query_tab_ui(),
+      viz_extra_tab_ui(),
+      hyperlinks_tab_ui(),
+      versioning_tab_ui(),
+      perf_tab_ui(),
+      mixed_stats_tab_ui(),
+      templates_tab_ui(),
+      ux_enhance_tab_ui()
     )
   )
 )
@@ -2318,8 +3204,10 @@ server <- function(input, output, session) {
     val <- translations[[lang]]
     for (p in parts) { val <- val[[p]]; if (is.null(val)) return(key) }
     replacements <- list(...)
+    # Auto-escape HTML in interpolated values to prevent XSS (#1)
     for (nm in names(replacements)) {
-      val <- gsub(paste0("\\{", nm, "\\}"), as.character(replacements[[nm]]), val)
+      escaped <- htmltools::htmlEscape(as.character(replacements[[nm]]))
+      val <- gsub(paste0("\\{", nm, "\\}"), escaped, val, fixed = FALSE)
     }
     val
   }
@@ -2472,26 +3360,59 @@ server <- function(input, output, session) {
     )
   }
 
-  # Dynamic sidebar
+  # Dynamic sidebar with collapsible blocks
   output$dynamic_sidebar <- renderMenu({
     current_lang()
     sidebarMenu(id = "sidebar",
-      menuItem(tr("sidebar.documento"), tabName = "texto", icon = icon("file-text")),
-      menuItem(tr("sidebar.codigos"), tabName = "codigos", icon = icon("tags")),
-      menuItem(tr("sidebar.categorias"), tabName = "categorias", icon = icon("folder-open")),
-      menuItem(tr("sidebar.extractos"), tabName = "resaltes", icon = icon("highlighter")),
-      menuItem(tr("sidebar.analisis"), tabName = "analisis", icon = icon("chart-bar")),
-      menuItem(tr("sidebar.analisis_ia"), tabName = "analisis_ia", icon = icon("robot")),
-      menuItem(tr("sidebar.analisis_semantico"), tabName = "analisis_semantico", icon = icon("brain")),
-      menuItem(tr("sidebar.reporte_ia"), tabName = "reporte_ia", icon = icon("file-alt")),
-      menuItem(tr("sidebar.proyecto"), tabName = "estado", icon = icon("save")),
-      menuItem(tr("sidebar.citar"), tabName = "citar", icon = icon("quote-right")),
-      menuItem(tr("sidebar.ayuda"), tabName = "info", icon = icon("info-circle"))
+      menuItem(tr("sidebar.bloque_preparacion"), icon = icon("folder-plus"), startExpanded = TRUE,
+        menuSubItem(tr("sidebar.documento"), tabName = "texto", icon = icon("file-text")),
+        menuSubItem(tr("sidebar.descriptores"), tabName = "descriptores", icon = icon("id-card")),
+        menuSubItem(tr("sidebar.exploracion"), tabName = "exploracion", icon = icon("search"))
+      ),
+      menuItem(tr("sidebar.bloque_codificacion"), icon = icon("tags"), startExpanded = FALSE,
+        menuSubItem(tr("sidebar.codigos"), tabName = "codigos", icon = icon("tag")),
+        menuSubItem(tr("sidebar.categorias"), tabName = "categorias", icon = icon("folder-open")),
+        menuSubItem(tr("sidebar.extractos"), tabName = "resaltes", icon = icon("highlighter")),
+        menuSubItem(tr("sidebar.memos"), tabName = "memos", icon = icon("sticky-note")),
+        menuSubItem(tr("sidebar.quotations"), tabName = "quotations", icon = icon("quote-right")),
+        menuSubItem(tr("sidebar.codebook"), tabName = "codebook", icon = icon("book")),
+        menuSubItem(tr("sidebar.grupos"), tabName = "grupos", icon = icon("layer-group")),
+        menuSubItem(tr("sidebar.research_q"), tabName = "research_q", icon = icon("question"))
+      ),
+      menuItem(tr("sidebar.bloque_analisis"), icon = icon("chart-line"), startExpanded = FALSE,
+        menuSubItem(tr("sidebar.analisis"), tabName = "analisis", icon = icon("chart-bar")),
+        menuSubItem(tr("sidebar.matricial"), tabName = "matricial", icon = icon("th")),
+        menuSubItem(tr("sidebar.analisis_ia"), tabName = "analisis_ia", icon = icon("robot")),
+        menuSubItem(tr("sidebar.analisis_semantico"), tabName = "analisis_semantico", icon = icon("brain")),
+        menuSubItem(tr("sidebar.topic_modeling"), tabName = "topic_modeling", icon = icon("lightbulb")),
+        menuSubItem(tr("sidebar.sentiment"), tabName = "sentiment", icon = icon("heart")),
+        menuSubItem(tr("sidebar.ner"), tabName = "ner", icon = icon("user-tag")),
+        menuSubItem(tr("sidebar.reliability"), tabName = "reliability", icon = icon("check-double"))
+      ),
+      menuItem(tr("sidebar.bloque_salida"), icon = icon("share-square"), startExpanded = FALSE,
+        menuSubItem(tr("sidebar.audit"), tabName = "audit", icon = icon("history")),
+        menuSubItem(tr("sidebar.reporte_ia"), tabName = "reporte_ia", icon = icon("file-alt")),
+        menuSubItem(tr("sidebar.proyecto"), tabName = "estado", icon = icon("save")),
+        menuSubItem(tr("sidebar.citar"), tabName = "citar", icon = icon("quote-right")),
+        menuSubItem(tr("sidebar.ayuda"), tabName = "info", icon = icon("info-circle"))
+      ),
+      menuItem("Pro features", icon = icon("gem"), startExpanded = FALSE,
+        menuSubItem("Multimedia (Whisper/OCR)", tabName = "multimedia", icon = icon("microphone")),
+        menuSubItem("Collaboration", tabName = "collab", icon = icon("users")),
+        menuSubItem("Query tool", tabName = "query", icon = icon("filter")),
+        menuSubItem("Advanced viz", tabName = "viz_extra", icon = icon("project-diagram")),
+        menuSubItem("Hyperlinks", tabName = "hyperlinks", icon = icon("link")),
+        menuSubItem("Versioning", tabName = "versioning", icon = icon("code-branch")),
+        menuSubItem("Performance", tabName = "performance", icon = icon("tachometer-alt")),
+        menuSubItem("Mixed statistics", tabName = "mixed_stats", icon = icon("chart-pie")),
+        menuSubItem("Templates", tabName = "templates", icon = icon("clipboard-list")),
+        menuSubItem("UX / Shortcuts", tabName = "ux_enhance", icon = icon("keyboard"))
+      )
     )
   })
 
   rv <- reactiveValues(
-    codigosDF    = tibble(Codigo = character(), Color = character()),
+    codigosDF    = tibble(Codigo = character(), Color = character(), Parent = character()),
     categoriasDF = tibble(Categoria = character(), Codigos = character()),
     docs         = NULL,
     idx          = 0,
@@ -2503,6 +3424,7 @@ server <- function(input, output, session) {
       Color      = character(),
       Archivo    = character(),
       FragmentId = character(),
+      Peso       = numeric(),
       Timestamp  = as.POSIXct(character())
     ),
     deselectMode = FALSE,
@@ -2523,11 +3445,111 @@ server <- function(input, output, session) {
     semantico_coherencia = NULL,   # Resultado coherencia
     similares_encontrados = NULL,  # Fragmentos similares encontrados
     red_semantica = NULL,          # Red semántica de códigos
-    visualizacion_2d = NULL        # Datos de visualización 2D (coordenadas reducidas)
+    visualizacion_2d = NULL,        # Datos de visualización 2D (coordenadas reducidas)
+    memos = tibble(memo_id = character(), titulo = character(), contenido = character(),
+                   vinculo_tipo = character(), vinculo_id = character(),
+                   timestamp = as.POSIXct(character())),
+    descriptores = NULL,
+    tiene_cambios_sin_guardar = FALSE,
+    # New features
+    code_groups = list(),         # named list: group_name -> code vector
+    doc_groups = list(),          # named list: group_name -> document vector
+    audit_log = tibble(Timestamp = as.POSIXct(character()), Accion = character(),
+                       Detalle = character()),
+    bookmarks = character(),       # vector of FragmentIds
+    research_questions = tibble(pregunta = character(), codigos = character(),
+                                timestamp = as.POSIXct(character())),
+    sentiment_results = NULL,
+    ner_results = NULL,
+    topic_model_result = NULL,
+    reliability_result = NULL,
+    coder2_tabla = NULL,
+    regex_results = NULL,
+    last_autosave = NULL,
+    ai_code_suggestions = NULL
   )
-  
+
+  # Audit log helper
+  log_action <- function(accion, detalle = "") {
+    rv$audit_log <- dplyr::bind_rows(
+      rv$audit_log,
+      tibble::tibble(
+        Timestamp = Sys.time(),
+        Accion = accion,
+        Detalle = as.character(detalle)
+      )
+    )
+  }
+
+  # Track unsaved changes
+  observeEvent({
+    list(rv$tabla, rv$codigosDF, rv$categoriasDF, rv$memos, rv$descriptores, rv$ia_results)
+  }, {
+    rv$tiene_cambios_sin_guardar <- TRUE
+  }, ignoreInit = TRUE)
+
+  # Clear flag on load
+  observeEvent(input$loadState, {
+    rv$tiene_cambios_sin_guardar <- FALSE
+  }, priority = -1)
+
+  output$indicador_cambios <- renderUI({
+    if (isTRUE(rv$tiene_cambios_sin_guardar)) {
+      tags$span(
+        icon("exclamation-circle"),
+        style = "color: #f39c12; font-size: 18px; cursor: help;",
+        title = if (current_lang() == "es") "Cambios sin guardar" else "Unsaved changes"
+      )
+    } else {
+      tags$span(
+        icon("check-circle"),
+        style = "color: #27ae60; font-size: 18px; cursor: help;",
+        title = if (current_lang() == "es") "Todo guardado" else "All saved"
+      )
+    }
+  })
+
   get_code_colors <- reactive({
     set_names(rv$codigosDF$Color, rv$codigosDF$Codigo)
+  })
+
+  # Dynamic UI for descriptor filters
+  output$filtros_descriptores_ui <- renderUI({
+    if (is.null(rv$descriptores) || ncol(rv$descriptores) <= 1) {
+      return(tags$em(tr("descriptores.sin_documentos"), style = "color: #95a5a6; font-size: 12px;"))
+    }
+    vars <- setdiff(names(rv$descriptores), "Archivo")
+    if (length(vars) == 0) {
+      return(tags$em("No descriptors defined", style = "color: #95a5a6; font-size: 12px;"))
+    }
+    tagList(
+      lapply(vars, function(v) {
+        values <- unique(rv$descriptores[[v]])
+        values <- values[!is.na(values) & values != ""]
+        if (length(values) == 0) return(NULL)
+        selectInput(paste0("filtro_desc_", v), v, choices = c("All" = "", values),
+                    multiple = TRUE, selectize = TRUE)
+      })
+    )
+  })
+
+  # Reactive: tabla filtered by descriptors
+  tabla_filtrada <- reactive({
+    df <- rv$tabla
+    if (is.null(rv$descriptores) || ncol(rv$descriptores) <= 1) return(df)
+    vars <- setdiff(names(rv$descriptores), "Archivo")
+    if (length(vars) == 0) return(df)
+
+    # Get active filters
+    docs_filtrados <- rv$descriptores$Archivo
+    for (v in vars) {
+      filter_val <- input[[paste0("filtro_desc_", v)]]
+      if (!is.null(filter_val) && length(filter_val) > 0 && !all(filter_val == "")) {
+        docs_matching <- rv$descriptores$Archivo[rv$descriptores[[v]] %in% filter_val]
+        docs_filtrados <- intersect(docs_filtrados, docs_matching)
+      }
+    }
+    df %>% dplyr::filter(Archivo %in% docs_filtrados)
   })
 
   # ========================================
@@ -2719,6 +3741,54 @@ server <- function(input, output, session) {
     shinyjs::html("li_guia_2", tr("info.guia_paso_2"))
     shinyjs::html("li_guia_3", tr("info.guia_paso_3"))
     shinyjs::html("li_guia_4", tr("info.guia_paso_4"))
+    # --- Memos tab ---
+    shinyjs::html("box_nuevo_memo", tr("memos.nuevo_memo"))
+    shinyjs::html("lbl_titulo_memo", paste0(" ", tr("memos.titulo_memo")))
+    shinyjs::html("lbl_contenido_memo", paste0(" ", tr("memos.contenido_memo")))
+    shinyjs::html("lbl_vincular_a", paste0(" ", tr("memos.vincular_a")))
+    shinyjs::html("btn_guardar_memo", paste0(" ", tr("memos.guardar_memo")))
+    shinyjs::html("btn_eliminar_memo", paste0(" ", tr("memos.eliminar_memo")))
+    shinyjs::html("box_lista_memos", tr("memos.lista_memos"))
+    # --- Exploration tab ---
+    shinyjs::html("box_config_exploracion", tr("analisis.configuracion"))
+    shinyjs::html("h_nube_palabras", paste0(" ", tr("exploracion.nube_palabras")))
+    shinyjs::html("h_kwic", paste0(" ", tr("exploracion.kwic_titulo")))
+    shinyjs::html("lbl_palabra_clave", tr("exploracion.palabra_clave"))
+    shinyjs::html("btn_buscar_kwic", paste0(" ", tr("exploracion.buscar_kwic")))
+    shinyjs::html("btn_generar_nube_lbl", paste0(" ", tr("exploracion.generar_nube")))
+    shinyjs::html("box_resultados_exploracion", tr("exploracion.frecuencia_palabras"))
+    # --- Descriptors tab ---
+    shinyjs::html("box_descriptores", tr("descriptores.titulo"))
+    shinyjs::html("p_desc_info", tr("descriptores.descripcion"))
+    shinyjs::html("btn_agregar_var", paste0(" ", tr("descriptores.agregar")))
+    shinyjs::html("btn_eliminar_var", paste0(" ", tr("descriptores.eliminar_variable")))
+    shinyjs::html("btn_guardar_desc", paste0(" ", tr("descriptores.guardar_descriptores")))
+    # --- Matrix tab ---
+    shinyjs::html("box_config_matricial", tr("analisis.configuracion"))
+    shinyjs::html("h_matrix_coding", paste0(" ", tr("matricial.matrix_coding")))
+    shinyjs::html("p_matrix_desc", tr("matricial.matrix_desc"))
+    shinyjs::html("btn_gen_matrix", paste0(" ", tr("matricial.generar_matrix")))
+    shinyjs::html("h_framework", paste0(" ", tr("matricial.framework")))
+    shinyjs::html("p_framework_desc", tr("matricial.framework_desc"))
+    shinyjs::html("btn_gen_framework", paste0(" ", tr("matricial.generar_framework")))
+    # --- Weight/Hierarchy ---
+    shinyjs::html("lbl_peso", paste0(" ", tr("ponderacion.peso")))
+    shinyjs::html("help_peso", tr("ponderacion.peso_help"))
+    shinyjs::html("lbl_parent_code", paste0(" ", tr("jerarquia.codigo_padre")))
+
+    # --- New tabs extra labels ---
+    shinyjs::html("lbl_idioma_texto", tr("exploracion.idioma_texto"))
+    shinyjs::html("lbl_min_freq", tr("exploracion.min_frecuencia"))
+    shinyjs::html("lbl_max_palabras", tr("exploracion.max_palabras"))
+    shinyjs::html("lbl_custom_sw", tr("exploracion.stopwords_custom"))
+    shinyjs::html("lbl_ventana", tr("exploracion.ventana_contexto"))
+    shinyjs::html("lbl_nombre_var", tr("descriptores.nombre_variable"))
+    shinyjs::html("lbl_tipo_matrix", tr("matricial.tipo_matrix"))
+    shinyjs::html("btn_dl_matrix", paste0(" ", tr("matricial.descargar_excel")))
+    shinyjs::html("btn_dl_framework", paste0(" ", tr("matricial.descargar_excel")))
+    shinyjs::html("btn_dl_freq", paste0(" ", tr("exploracion.descargar_frecuencias")))
+    shinyjs::html("h_freq_tabla", paste0(" ", tr("exploracion.frecuencia_palabras")))
+    shinyjs::html("h_filtros_desc", paste0(" ", tr("analisis.configuracion")))
 
     # --- Update select inputs with translated choices ---
     updateSelectInput(session, "estilo_reporte",
@@ -3112,12 +4182,35 @@ server <- function(input, output, session) {
   
   output$tablaCodigos <- renderDT({
     current_lang()
+    # Compute hierarchy level for indentation
+    df <- rv$codigosDF
+    if (nrow(df) > 0 && "Parent" %in% names(df)) {
+      # Compute depth for each code
+      compute_depth <- function(code, df, visited = character()) {
+        if (code %in% visited) return(0)  # cycle protection
+        parent <- df$Parent[df$Codigo == code]
+        if (length(parent) == 0 || is.na(parent) || parent == "") return(0)
+        1 + compute_depth(parent, df, c(visited, code))
+      }
+      df$Nivel <- sapply(df$Codigo, compute_depth, df = df)
+      # Sort: first by parent chain, then alphabetically
+      df <- df[order(df$Parent, df$Codigo), ]
+      # Add visual indentation using HTML non-breaking spaces
+      df$Display <- mapply(function(code, nivel) {
+        indent <- paste(rep("&nbsp;&nbsp;&nbsp;&nbsp;", nivel), collapse = "")
+        prefix <- if (nivel > 0) "&#8627; " else ""
+        paste0(indent, prefix, htmltools::htmlEscape(code))
+      }, df$Codigo, df$Nivel)
+      df_display <- data.frame(Display = df$Display, Color = df$Color, Parent = df$Parent, stringsAsFactors = FALSE)
+    } else {
+      df_display <- df
+    }
     datatable(
-      rv$codigosDF,
+      df_display,
       selection = "single",
+      escape = FALSE,
       options = list(
-        pageLength = 8,
-        dom = 'frtip',
+        pageLength = 10, dom = 'frtip',
         language = list(
           search = tr("datatable.search"),
           lengthMenu = tr("datatable.lengthMenu_codigos"),
@@ -3125,35 +4218,46 @@ server <- function(input, output, session) {
           paginate = list(previous = tr("datatable.paginate_previous"), `next` = tr("datatable.paginate_next"))
         )
       ),
-      colnames = c(tr("colnames.codigo"), tr("colnames.color"))
+      colnames = c(tr("colnames.codigo"), tr("colnames.color"), tr("jerarquia.codigo_padre"))
     ) %>%
-      formatStyle(
-        "Color",
-        backgroundColor = styleEqual(rv$codigosDF$Color, rv$codigosDF$Color),
-        color = "white",
-        fontWeight = "bold"
-      )
+      formatStyle("Color", backgroundColor = styleEqual(rv$codigosDF$Color, rv$codigosDF$Color), color = "white", fontWeight = "bold")
   })
-  
+
   observeEvent(input$tablaCodigos_rows_selected, {
     sel <- input$tablaCodigos_rows_selected; req(length(sel)==1)
-    updateTextInput(session, "new_codigo", value = rv$codigosDF$Codigo[sel])
-    updateColourInput(session, "new_color", value = rv$codigosDF$Color[sel])
+    # Get the code by matching sorted display order
+    df <- rv$codigosDF
+    if ("Parent" %in% names(df) && nrow(df) > 0) {
+      df <- df[order(df$Parent, df$Codigo), ]
+    }
+    codigo_sel <- df$Codigo[sel]
+    row_idx <- which(rv$codigosDF$Codigo == codigo_sel)
+    updateTextInput(session, "new_codigo", value = rv$codigosDF$Codigo[row_idx])
+    updateColourInput(session, "new_color", value = rv$codigosDF$Color[row_idx])
+    if ("Parent" %in% names(rv$codigosDF)) {
+      updateSelectInput(session, "parent_codigo", selected = rv$codigosDF$Parent[row_idx])
+    }
   })
   
   observeEvent(input$addOrUpdateCodigo, {
     req(input$new_codigo)
     df <- rv$codigosDF
     if (input$new_codigo %in% df$Codigo) {
-      df <- df %>% mutate(Color = if_else(Codigo==input$new_codigo, input$new_color, Color))
+      df <- df %>% mutate(
+        Color = if_else(Codigo==input$new_codigo, input$new_color, Color),
+        Parent = if_else(Codigo==input$new_codigo, input$parent_codigo, Parent)
+      )
       showNotification(tr("notifications.codigo_actualizado", code = input$new_codigo), type = "message", duration = 2)
     } else {
-      df <- bind_rows(df, tibble(Codigo=input$new_codigo, Color=input$new_color))
+      df <- bind_rows(df, tibble(Codigo=input$new_codigo, Color=input$new_color, Parent=input$parent_codigo))
       showNotification(tr("notifications.codigo_anadido", code = input$new_codigo), type = "message", duration = 2)
     }
     rv$codigosDF <- df
     updateSelectInput(session, "codigoTexto", choices = df$Codigo)
     updateSelectizeInput(session, "codigos_for_categoria", choices = df$Codigo, server = TRUE)
+    # Exclude current code from parent choices
+    other_codes <- setdiff(df$Codigo, input$new_codigo)
+    updateSelectInput(session, "parent_codigo", choices = c("(none)" = "", stats::setNames(other_codes, other_codes)))
   })
   
   observeEvent(input$deleteCodigo, {
@@ -3389,11 +4493,12 @@ server <- function(input, output, session) {
           Color = col,
           Archivo = archivo_actual,
           FragmentId = fragment_id,
+          Peso = input$pesoFragmento,
           Timestamp = Sys.time()
         )
-        
+
         rv$tabla <- bind_rows(rv$tabla, newrow)
-        
+
         showNotification(
           tr("notifications.codigo_anadido_fragmento", code = code),
           type = "message",
@@ -3423,11 +4528,12 @@ server <- function(input, output, session) {
         Color = col,
         Archivo = archivo_actual,
         FragmentId = fragment_id,
+        Peso = input$pesoFragmento,
         Timestamp = Sys.time()
       )
-      
+
       rv$tabla <- bind_rows(rv$tabla, newrow)
-      
+
       if (!input$modoAcumulativo && nrow(fragmento_existente) > 0) {
         showNotification(
           tr("notifications.fragmento_recodificado", code = code),
@@ -3694,7 +4800,7 @@ server <- function(input, output, session) {
 
     tabla_mostrar <- rv$tabla %>%
       arrange(desc(Timestamp)) %>%
-      select(Extracto, Codigo, Categoria, Archivo, Timestamp) %>%
+      select(Extracto, Codigo, Categoria, Peso, Archivo, Timestamp) %>%
       mutate(
         Extracto = str_trunc(Extracto, 60),
         Timestamp = format(Timestamp, "%H:%M:%S")
@@ -3718,11 +4824,12 @@ server <- function(input, output, session) {
           list(targets = 0, width = "250px"),
           list(targets = 1, width = "120px"),
           list(targets = 2, width = "120px"),
-          list(targets = 3, width = "180px"),
-          list(targets = 4, width = "80px")
+          list(targets = 3, width = "60px"),
+          list(targets = 4, width = "180px"),
+          list(targets = 5, width = "80px")
         )
       ),
-      colnames = c(tr("colnames.extracto"), tr("colnames.codigo"), tr("colnames.categoria"), tr("colnames.archivo"), tr("colnames.hora"))
+      colnames = c(tr("colnames.extracto"), tr("colnames.codigo"), tr("colnames.categoria"), tr("ponderacion.peso"), tr("colnames.archivo"), tr("colnames.hora"))
     )
     
     # Aplicar formatStyle solo si hay códigos disponibles
@@ -3864,23 +4971,23 @@ server <- function(input, output, session) {
   
   output$plotCodigos <- renderPlotly({
     # Hacer que dependa tanto de la tabla como de los códigos
-    req(nrow(rv$tabla) > 0, nrow(rv$codigosDF) >= 0)
+    req(nrow(tabla_filtrada()) > 0, nrow(rv$codigosDF) >= 0)
 
     tryCatch({
       # plot_codigos ahora devuelve un objeto plotly directamente
-      plot_codigos(rv$tabla, fill = input$fillToggle, code_colors = get_code_colors(),
+      plot_codigos(tabla_filtrada(), fill = input$fillToggle, code_colors = get_code_colors(),
                    labels = list(freq = tr("plots.frecuencia"), codes = tr("plots.codigos_x"), cat = tr("plots.categoria_fill"), sin_cat = tr("plots.sin_categoria")))
     }, error = function(e) {
       showNotification(tr("notifications.error_grafico", msg = e$message), type = "error")
       NULL
     })
   })
-  
+
   output$plotRedCentralidad <- renderPlot({
     # Hacer que dependa tanto de la tabla como de los códigos
-    req(nrow(rv$tabla) > 0, nrow(rv$codigosDF) >= 0)
-    
-    result <- plot_network_and_centrality(rv$tabla, code_colors = get_code_colors(),
+    req(nrow(tabla_filtrada()) > 0, nrow(rv$codigosDF) >= 0)
+
+    result <- plot_network_and_centrality(tabla_filtrada(), code_colors = get_code_colors(),
                                           labels = list(code = tr("plots.codigo_label"), centrality = tr("plots.centralidad_zscore")))
     result$plot
   }, res = 96, bg = "transparent")
@@ -3914,6 +5021,13 @@ server <- function(input, output, session) {
         similares_encontrados = rv$similares_encontrados,
         red_semantica = rv$red_semantica,
         visualizacion_2d = rv$visualizacion_2d,
+        memos = rv$memos,
+        descriptores = rv$descriptores,
+        code_groups = rv$code_groups,
+        doc_groups = rv$doc_groups,
+        audit_log = rv$audit_log,
+        bookmarks = rv$bookmarks,
+        research_questions = rv$research_questions,
         # Metadatos
         version = paste0(APP_VERSION, "_con_visualizacion"),
         metadata = list(
@@ -3930,6 +5044,7 @@ server <- function(input, output, session) {
       )
       saveRDS(estado, file)
 
+      rv$tiene_cambios_sin_guardar <- FALSE
       showNotification(tr("notifications.proyecto_guardado"), type = "message", duration = 3)
     }
   )
@@ -3982,7 +5097,20 @@ server <- function(input, output, session) {
       if (is.null(rv$semantico_coherencia)) rv$semantico_coherencia <- NULL
       if (is.null(rv$similares_encontrados)) rv$similares_encontrados <- NULL
       if (is.null(rv$red_semantica)) rv$red_semantica <- NULL
-      
+
+      if (is.null(rv$memos)) {
+        rv$memos <- tibble(memo_id = character(), titulo = character(), contenido = character(),
+                           vinculo_tipo = character(), vinculo_id = character(),
+                           timestamp = as.POSIXct(character()))
+      }
+
+      # Initialize new-feature fields if loading older projects
+      if (is.null(rv$code_groups)) rv$code_groups <- list()
+      if (is.null(rv$doc_groups)) rv$doc_groups <- list()
+      if (is.null(rv$audit_log)) rv$audit_log <- tibble(Timestamp = as.POSIXct(character()), Accion = character(), Detalle = character())
+      if (is.null(rv$bookmarks)) rv$bookmarks <- character()
+      if (is.null(rv$research_questions)) rv$research_questions <- tibble(pregunta = character(), codigos = character(), timestamp = as.POSIXct(character()))
+
       # Limpiar categorías vacías en datos existentes
       if (nrow(rv$tabla) > 0) {
         rv$tabla <- rv$tabla %>%
@@ -4115,8 +5243,9 @@ server <- function(input, output, session) {
   
   # Ejecutar análisis IA
   observeEvent(input$run_ia_analysis, {
-    # Validaciones
-    if (is.null(rv$docs) || length(rv$docs) == 0) {
+    # Validaciones - snapshot reactive state
+    docs_snapshot <- isolate(rv$docs)
+    if (is.null(docs_snapshot) || length(docs_snapshot) == 0) {
       showNotification(tr("notifications.carga_documentos"), type = "error", duration = 3)
       return()
     }
@@ -4135,15 +5264,15 @@ server <- function(input, output, session) {
     }
 
     n_codes <- nrow(dict)
-    total <- length(rv$docs) * n_codes
+    total <- length(docs_snapshot) * n_codes
 
     withProgress(message = tr("progress.analizando_gpt"), value = 0, {
       results_list <- vector("list", total)
       step <- 0
 
-      for (i in seq_along(rv$docs)) {
-        doc_name <- rv$docs[[i]]$name
-        doc_text <- rv$docs[[i]]$modified
+      for (i in seq_along(docs_snapshot)) {
+        doc_name <- docs_snapshot[[i]]$name
+        doc_text <- docs_snapshot[[i]]$modified
 
         for (j in seq_len(n_codes)) {
           step <- step + 1
@@ -4224,7 +5353,7 @@ server <- function(input, output, session) {
       # FORZAR la creación de la columna Archivo si no existe
       if (!"Archivo" %in% names(all_results) && nrow(all_results) > 0) {
         # Recrear la columna Archivo basándose en los nombres de documentos
-        doc_names <- sapply(rv$docs, function(d) d$name)
+        doc_names <- sapply(docs_snapshot, function(d) d$name)
         n_docs <- length(doc_names)
         n_codes <- nrow(dict)
         
@@ -4768,9 +5897,11 @@ server <- function(input, output, session) {
       return()
     }
 
-    # Verificar si los datos han cambiado (usando hash)
+    # Verificar si los datos han cambiado (usando hash) - snapshot reactive state
     current_hash <- digest::digest(ds$datos$Extracto)
-    if (!is.null(rv$hf_cache_hash) && rv$hf_cache_hash == current_hash && !is.null(rv$hf_embeddings)) {
+    cached_hash <- isolate(rv$hf_cache_hash)
+    cached_embeddings <- isolate(rv$hf_embeddings)
+    if (!is.null(cached_hash) && cached_hash == current_hash && !is.null(cached_embeddings)) {
       showNotification(tr("notifications.embeddings_actualizados"), type = "message", duration = 3)
       return()
     }
@@ -5712,6 +6843,28 @@ server <- function(input, output, session) {
       }
     }
 
+    # Include memos if available
+    if (!is.null(rv$memos) && nrow(rv$memos) > 0) {
+      if (idioma == "es") {
+        info_datos <- paste0(info_datos, "## MEMOS ANAL\u00cdTICOS DEL INVESTIGADOR\n")
+      } else {
+        info_datos <- paste0(info_datos, "## RESEARCHER'S ANALYTICAL MEMOS\n")
+      }
+      for (i in seq_len(min(nrow(rv$memos), 10))) {
+        memo <- rv$memos[i, ]
+        info_datos <- paste0(info_datos,
+          "- **", memo$titulo, "** (", memo$vinculo_tipo, ": ", memo$vinculo_id, "): ",
+          stringr::str_trunc(memo$contenido, 300), "\n"
+        )
+      }
+      info_datos <- paste0(info_datos, "\n")
+      if (idioma == "es") {
+        info_datos <- paste0(info_datos, "NOTA: Incorpora las reflexiones de los memos en la interpretaci\u00f3n.\n\n")
+      } else {
+        info_datos <- paste0(info_datos, "NOTE: Incorporate memo reflections into the interpretation.\n\n")
+      }
+    }
+
     # Instrucciones finales - Formato artículo científico
     if (idioma == "es") {
       tarea <- paste0(
@@ -6098,12 +7251,800 @@ server <- function(input, output, session) {
     }
   )
 
+  # ========================================
+  # Memos System
+  # ========================================
+
+  output$memo_doc_selector <- renderUI({
+    req(rv$docs)
+    doc_names <- sapply(rv$docs, function(d) d$name)
+    selectInput("memo_vinculo_doc", tr("memos.documento_opt"), choices = doc_names)
+  })
+
+  output$memo_code_selector <- renderUI({
+    req(nrow(rv$codigosDF) > 0)
+    selectInput("memo_vinculo_code", tr("memos.codigo_opt"), choices = rv$codigosDF$Codigo)
+  })
+
+  output$memo_frag_selector <- renderUI({
+    req(nrow(rv$tabla) > 0)
+    # Show truncated extracts with their FragmentId
+    frags <- rv$tabla %>%
+      dplyr::distinct(FragmentId, Extracto, Codigo, Archivo) %>%
+      dplyr::mutate(label = paste0(stringr::str_trunc(Extracto, 50), " [", Codigo, "]"))
+    choices <- stats::setNames(frags$FragmentId, frags$label)
+    selectInput("memo_vinculo_frag", "Fragment", choices = choices)
+  })
+
+  output$tabla_memos <- renderDT({
+    current_lang()
+    if (nrow(rv$memos) == 0) {
+      return(datatable(tibble(Mensaje = tr("memos.sin_memos")), options = list(dom = 't'), rownames = FALSE))
+    }
+    tabla_mostrar <- rv$memos %>%
+      mutate(
+        contenido_corto = stringr::str_trunc(contenido, 80),
+        fecha = format(timestamp, "%d/%m/%Y %H:%M")
+      ) %>%
+      select(titulo, contenido_corto, vinculo_tipo, vinculo_id, fecha)
+    datatable(tabla_mostrar, selection = "single",
+      options = list(pageLength = 10, scrollX = TRUE,
+        language = list(search = tr("datatable.search"))),
+      colnames = c(tr("memos.titulo_memo"), tr("memos.contenido_memo"), tr("memos.vinculo"), "ID", tr("memos.fecha"))
+    )
+  })
+
+  observeEvent(input$tabla_memos_rows_selected, {
+    sel <- input$tabla_memos_rows_selected; req(length(sel) == 1)
+    memo <- rv$memos[sel, ]
+    updateTextInput(session, "memo_titulo", value = memo$titulo)
+    updateTextAreaInput(session, "memo_contenido", value = memo$contenido)
+    updateSelectInput(session, "memo_vinculo_tipo", selected = memo$vinculo_tipo)
+  })
+
+  observeEvent(input$guardar_memo, {
+    req(nzchar(trimws(input$memo_titulo)))
+    vinculo_id <- switch(input$memo_vinculo_tipo,
+      "documento" = input$memo_vinculo_doc %||% "",
+      "codigo" = input$memo_vinculo_code %||% "",
+      "fragmento" = input$memo_vinculo_frag %||% "",
+      ""
+    )
+    sel <- input$tabla_memos_rows_selected
+    if (!is.null(sel) && length(sel) == 1) {
+      rv$memos$titulo[sel] <- input$memo_titulo
+      rv$memos$contenido[sel] <- input$memo_contenido
+      rv$memos$vinculo_tipo[sel] <- input$memo_vinculo_tipo
+      rv$memos$vinculo_id[sel] <- vinculo_id
+      rv$memos$timestamp[sel] <- Sys.time()
+    } else {
+      new_memo <- tibble(
+        memo_id = crear_fragment_id(), titulo = input$memo_titulo,
+        contenido = input$memo_contenido, vinculo_tipo = input$memo_vinculo_tipo,
+        vinculo_id = vinculo_id, timestamp = Sys.time()
+      )
+      rv$memos <- bind_rows(rv$memos, new_memo)
+    }
+    updateTextInput(session, "memo_titulo", value = "")
+    updateTextAreaInput(session, "memo_contenido", value = "")
+    showNotification(tr("memos.memo_guardado"), type = "message", duration = 2)
+  })
+
+  observeEvent(input$eliminar_memo, {
+    sel <- input$tabla_memos_rows_selected; req(length(sel) == 1)
+    rv$memos <- rv$memos[-sel, ]
+    showNotification(tr("memos.memo_eliminado"), type = "warning", duration = 2)
+  })
+
+  # ========================================
+  # Text Exploration: Word Cloud + KWIC
+  # ========================================
+
+  rv_freq <- reactiveVal(NULL)
+  rv_kwic <- reactiveVal(NULL)
+
+  output$wc_code_selector <- renderUI({
+    req(nrow(rv$codigosDF) > 0)
+    selectInput("wc_codigo", NULL, choices = rv$codigosDF$Codigo)
+  })
+
+  output$wc_cat_selector <- renderUI({
+    req(nrow(rv$categoriasDF) > 0)
+    selectInput("wc_categoria", NULL, choices = rv$categoriasDF$Categoria)
+  })
+
+  observeEvent(input$btn_generar_nube, {
+    scope <- input$wordcloud_scope %||% "all"
+    textos <- if (scope == "all") {
+      req(rv$docs, length(rv$docs) > 0)
+      sapply(rv$docs, function(d) d$original)
+    } else if (scope == "code") {
+      req(input$wc_codigo, nrow(rv$tabla) > 0)
+      rv$tabla$Extracto[rv$tabla$Codigo == input$wc_codigo]
+    } else if (scope == "category") {
+      req(input$wc_categoria, nrow(rv$tabla) > 0)
+      rv$tabla$Extracto[rv$tabla$Categoria == input$wc_categoria]
+    }
+    if (length(textos) == 0) {
+      showNotification("No text to analyze", type = "warning")
+      return()
+    }
+    custom_sw <- if (nzchar(trimws(input$custom_stopwords))) {
+      trimws(strsplit(input$custom_stopwords, ",")[[1]])
+    } else NULL
+    freq <- calcular_frecuencia_palabras(textos, idioma = input$idioma_stopwords,
+      min_freq = input$min_freq_palabras, max_palabras = input$max_palabras,
+      custom_stopwords = custom_sw)
+    rv_freq(freq)
+  })
+
+  output$plot_wordcloud <- wordcloud2::renderWordcloud2({
+    req(rv_freq(), nrow(rv_freq()) > 0)
+    wordcloud2::wordcloud2(rv_freq(), size = 0.7, color = "random-dark",
+      backgroundColor = "white", fontFamily = "Source Sans Pro")
+  })
+
+  output$tabla_frecuencias <- renderDT({
+    current_lang()
+    req(rv_freq(), nrow(rv_freq()) > 0)
+    datatable(rv_freq(), options = list(pageLength = 15, dom = 'frtip',
+      language = list(search = tr("datatable.search"))),
+      colnames = c(tr("exploracion.palabra_col"), tr("exploracion.frecuencia_col")),
+      rownames = FALSE)
+  })
+
+  output$download_frecuencias <- downloadHandler(
+    filename = function() paste0("word_frequencies_", Sys.Date(), ".xlsx"),
+    content = function(file) {
+      req(rv_freq())
+      wb <- createWorkbook()
+      addWorksheet(wb, "Frequencies")
+      writeData(wb, "Frequencies", rv_freq())
+      saveWorkbook(wb, file, overwrite = TRUE)
+    }
+  )
+
+  observeEvent(input$btn_kwic, {
+    req(rv$docs, length(rv$docs) > 0, nzchar(trimws(input$kwic_keyword)))
+    textos <- sapply(rv$docs, function(d) d$original)
+    nombres <- sapply(rv$docs, function(d) d$name)
+    result <- kwic_search(textos, nombres, input$kwic_keyword, window = input$kwic_window)
+    rv_kwic(result)
+  })
+
+  output$tabla_kwic <- renderDT({
+    current_lang()
+    result <- rv_kwic()
+    if (is.null(result) || nrow(result) == 0) {
+      return(datatable(tibble(Mensaje = tr("exploracion.sin_resultados_kwic")),
+        options = list(dom = 't'), rownames = FALSE))
+    }
+    datatable(result, options = list(pageLength = 15, scrollX = TRUE,
+      language = list(search = tr("datatable.search"))),
+      colnames = c(tr("exploracion.documento_col"), tr("exploracion.contexto_izq"),
+        tr("exploracion.keyword_col"), tr("exploracion.contexto_der"), tr("exploracion.posicion")),
+      rownames = FALSE) %>%
+      formatStyle("Keyword", fontWeight = "bold", color = "#c0392b")
+  })
+
+  # ========================================
+  # Descriptors
+  # ========================================
+
+  observeEvent(input$agregar_variable, {
+    req(nzchar(trimws(input$nueva_variable)))
+    var_name <- trimws(input$nueva_variable)
+    if (is.null(rv$descriptores)) {
+      req(rv$docs)
+      rv$descriptores <- tibble(Archivo = sapply(rv$docs, function(d) d$name))
+    }
+    if (!var_name %in% names(rv$descriptores)) {
+      rv$descriptores[[var_name]] <- ""
+      showNotification(tr("descriptores.variable_agregada", var = var_name), type = "message", duration = 2)
+    }
+    updateTextInput(session, "nueva_variable", value = "")
+  })
+
+  output$selector_eliminar_var <- renderUI({
+    if (!is.null(rv$descriptores) && ncol(rv$descriptores) > 1) {
+      vars <- setdiff(names(rv$descriptores), "Archivo")
+      selectInput("var_a_eliminar", NULL, choices = vars, width = "150px")
+    }
+  })
+
+  observeEvent(input$eliminar_variable, {
+    req(input$var_a_eliminar)
+    var_name <- input$var_a_eliminar
+    rv$descriptores[[var_name]] <- NULL
+    showNotification(tr("descriptores.variable_eliminada", var = var_name), type = "warning", duration = 2)
+  })
+
+  output$tabla_descriptores <- rhandsontable::renderRHandsontable({
+    if (is.null(rv$descriptores)) {
+      if (!is.null(rv$docs) && length(rv$docs) > 0) {
+        rv$descriptores <- tibble(Archivo = sapply(rv$docs, function(d) d$name))
+      } else {
+        return(NULL)
+      }
+    }
+    rhandsontable::rhandsontable(rv$descriptores, rowHeaders = NULL, stretchH = "all") %>%
+      rhandsontable::hot_col("Archivo", readOnly = TRUE)
+  })
+
+  observeEvent(input$guardar_descriptores, {
+    req(input$tabla_descriptores)
+    rv$descriptores <- rhandsontable::hot_to_r(input$tabla_descriptores)
+    showNotification(tr("descriptores.descriptores_guardados"), type = "message", duration = 2)
+  })
+
+  # Initialize descriptors when documents are loaded
+  observeEvent(rv$docs, {
+    if (!is.null(rv$docs) && length(rv$docs) > 0) {
+      doc_names <- sapply(rv$docs, function(d) d$name)
+      if (is.null(rv$descriptores)) {
+        rv$descriptores <- tibble(Archivo = doc_names)
+      } else {
+        # Add any new documents
+        existing <- rv$descriptores$Archivo
+        new_docs <- setdiff(doc_names, existing)
+        if (length(new_docs) > 0) {
+          new_rows <- tibble(Archivo = new_docs)
+          for (col in setdiff(names(rv$descriptores), "Archivo")) {
+            new_rows[[col]] <- ""
+          }
+          rv$descriptores <- bind_rows(rv$descriptores, new_rows)
+        }
+      }
+    }
+  })
+
+  # ========================================
+  # Matrix Analysis
+  # ========================================
+
+  rv_matrix <- reactiveVal(NULL)
+  rv_framework <- reactiveVal(NULL)
+
+  observeEvent(input$btn_generar_matrix, {
+    req(nrow(rv$tabla) > 0)
+    if (input$tipo_matrix == "cod_doc") {
+      result <- matrix_coding_query(rv$tabla)
+    } else {
+      result <- matrix_codes_x_codes(rv$tabla)
+    }
+    rv_matrix(result)
+  })
+
+  output$tabla_matrix_coding <- renderDT({
+    current_lang()
+    result <- rv_matrix()
+    if (is.null(result)) {
+      return(datatable(tibble(Mensaje = tr("matricial.sin_datos")), options = list(dom = 't'), rownames = FALSE))
+    }
+    dt <- datatable(result, options = list(pageLength = 20, scrollX = TRUE,
+      language = list(search = tr("datatable.search"))), rownames = FALSE)
+    # Color numeric cells
+    numeric_cols <- names(result)[sapply(result, is.numeric)]
+    if (length(numeric_cols) > 0) {
+      dt <- dt %>% formatStyle(numeric_cols,
+        background = styleColorBar(range(0, max(unlist(result[numeric_cols]), na.rm = TRUE)), "#d5e8f0"),
+        backgroundSize = "98% 88%", backgroundRepeat = "no-repeat", backgroundPosition = "center")
+    }
+    dt
+  })
+
+  output$download_matrix_excel <- downloadHandler(
+    filename = function() paste0("matrix_coding_", Sys.Date(), ".xlsx"),
+    content = function(file) {
+      req(rv_matrix())
+      wb <- createWorkbook()
+      addWorksheet(wb, "Matrix")
+      writeData(wb, "Matrix", rv_matrix())
+      headerStyle <- createStyle(fontSize = 12, fontColour = "#FFFFFF", halign = "center",
+        fgFill = "#2c3e50", textDecoration = "bold")
+      addStyle(wb, "Matrix", headerStyle, rows = 1, cols = 1:ncol(rv_matrix()), gridExpand = TRUE)
+      setColWidths(wb, "Matrix", cols = 1:ncol(rv_matrix()), widths = "auto")
+      saveWorkbook(wb, file, overwrite = TRUE)
+    }
+  )
+
+  observeEvent(input$btn_generar_framework, {
+    req(nrow(rv$tabla) > 0)
+    result <- generar_framework_matrix(rv$tabla, rv$docs)
+    rv_framework(result)
+  })
+
+  output$tabla_framework <- renderDT({
+    current_lang()
+    result <- rv_framework()
+    if (is.null(result)) {
+      return(datatable(tibble(Mensaje = tr("matricial.sin_datos")), options = list(dom = 't'), rownames = FALSE))
+    }
+    # Pivot to wide format for display
+    display <- result %>%
+      select(Documento, Codigo, Contenido) %>%
+      tidyr::pivot_wider(names_from = Codigo, values_from = Contenido, values_fill = "")
+    datatable(display, options = list(pageLength = 10, scrollX = TRUE,
+      language = list(search = tr("datatable.search"))), rownames = FALSE)
+  })
+
+  output$download_framework_excel <- downloadHandler(
+    filename = function() paste0("framework_matrix_", Sys.Date(), ".xlsx"),
+    content = function(file) {
+      req(rv_framework())
+      display <- rv_framework() %>%
+        select(Documento, Codigo, Contenido) %>%
+        tidyr::pivot_wider(names_from = Codigo, values_from = Contenido, values_fill = "")
+      wb <- createWorkbook()
+      addWorksheet(wb, "Framework")
+      writeData(wb, "Framework", display)
+      headerStyle <- createStyle(fontSize = 12, fontColour = "#FFFFFF", halign = "center",
+        fgFill = "#2c3e50", textDecoration = "bold")
+      addStyle(wb, "Framework", headerStyle, rows = 1, cols = 1:ncol(display), gridExpand = TRUE)
+      setColWidths(wb, "Framework", cols = 1:ncol(display), widths = 25)
+      saveWorkbook(wb, file, overwrite = TRUE)
+    }
+  )
+
   # Inicializar variables reactivas para similares encontrados
   observe({
     if (is.null(rv$similares_encontrados)) {
       rv$similares_encontrados <- tibble()
     }
   })
+
+  # ========================================
+  # QUOTATION MANAGER
+  # ========================================
+
+  observe({
+    req(rv$codigosDF)
+    updateSelectInput(session, "quot_filtro_codigo", choices = rv$codigosDF$Codigo)
+  })
+
+  observe({
+    if (!is.null(rv$docs)) {
+      updateSelectInput(session, "quot_filtro_doc", choices = sapply(rv$docs, function(d) d$name))
+    }
+  })
+
+  output$tabla_quotations <- renderDT({
+    current_lang()
+    df <- rv$tabla
+    if (nrow(df) == 0) return(datatable(tibble(Mensaje = "No quotations"), options = list(dom = 't'), rownames = FALSE))
+
+    if (!is.null(input$quot_filtro_codigo) && length(input$quot_filtro_codigo) > 0) {
+      df <- df %>% filter(Codigo %in% input$quot_filtro_codigo)
+    }
+    if (!is.null(input$quot_filtro_doc) && length(input$quot_filtro_doc) > 0) {
+      df <- df %>% filter(Archivo %in% input$quot_filtro_doc)
+    }
+    if (!is.null(input$quot_filtro_peso) && !is.na(input$quot_filtro_peso)) {
+      df <- df %>% filter(!is.na(Peso) & Peso >= input$quot_filtro_peso)
+    }
+
+    display <- df %>%
+      select(Extracto, Codigo, Categoria, Archivo, Peso, Timestamp) %>%
+      mutate(Timestamp = format(Timestamp, "%Y-%m-%d %H:%M"))
+
+    datatable(display, options = list(pageLength = 20, scrollX = TRUE,
+      language = list(search = tr("datatable.search"))),
+      rownames = FALSE)
+  })
+
+  output$download_quot_excel <- downloadHandler(
+    filename = function() paste0("quotations_", Sys.Date(), ".xlsx"),
+    content = function(file) {
+      wb <- createWorkbook()
+      addWorksheet(wb, "Quotations")
+      writeData(wb, "Quotations", rv$tabla)
+      saveWorkbook(wb, file, overwrite = TRUE)
+    }
+  )
+
+  # ========================================
+  # CODEBOOK: MERGE / SPLIT / EXPORT
+  # ========================================
+
+  observe({
+    req(rv$codigosDF)
+    codes <- rv$codigosDF$Codigo
+    updateSelectInput(session, "merge_from", choices = codes)
+    updateSelectInput(session, "merge_to", choices = codes)
+    updateSelectInput(session, "split_source", choices = codes)
+    updateSelectInput(session, "miembros_code_group", choices = codes)
+    updateSelectInput(session, "rq_codigos", choices = codes)
+  })
+
+  observeEvent(input$btn_merge, {
+    req(input$merge_from, input$merge_to)
+    tryCatch({
+      result <- merge_codes(rv$codigosDF, rv$tabla, input$merge_from, input$merge_to)
+      rv$codigosDF <- result$codigosDF
+      rv$tabla <- result$tabla
+      log_action("MERGE_CODES", paste(input$merge_from, "->", input$merge_to))
+      showNotification(paste0("Merged ", input$merge_from, " into ", input$merge_to), type = "message")
+    }, error = function(e) showNotification(paste("Error:", e$message), type = "error"))
+  })
+
+  output$split_fragments_ui <- renderUI({
+    req(input$split_source)
+    frags <- rv$tabla %>% filter(Codigo == input$split_source)
+    if (nrow(frags) == 0) return(tags$em("No fragments for this code"))
+    choices <- stats::setNames(frags$FragmentId, stringr::str_trunc(frags$Extracto, 60))
+    selectInput("split_fragments", "Select fragments", choices = choices, multiple = TRUE)
+  })
+
+  observeEvent(input$btn_split, {
+    req(input$split_source, input$split_new_code, length(input$split_fragments) > 0)
+    tryCatch({
+      result <- split_code(rv$codigosDF, rv$tabla, input$split_source, input$split_new_code, input$split_new_color, input$split_fragments)
+      rv$codigosDF <- result$codigosDF
+      rv$tabla <- result$tabla
+      log_action("SPLIT_CODE", paste(input$split_source, "->", input$split_new_code))
+      showNotification(paste0("Split ", input$split_source, " -> ", input$split_new_code), type = "message")
+    }, error = function(e) showNotification(paste("Error:", e$message), type = "error"))
+  })
+
+  output$download_codebook_docx <- downloadHandler(
+    filename = function() paste0("codebook_", Sys.Date(), ".docx"),
+    content = function(file) {
+      export_codebook_docx(rv$codigosDF, rv$categoriasDF, rv$tabla, file,
+                           titulo = if (current_lang() == "es") "Libro de C\u00f3digos" else "Codebook",
+                           lang = current_lang())
+    }
+  )
+
+  output$download_codebook_xlsx <- downloadHandler(
+    filename = function() paste0("codebook_", Sys.Date(), ".xlsx"),
+    content = function(file) {
+      export_codebook_excel(rv$codigosDF, rv$categoriasDF, rv$tabla, file)
+    }
+  )
+
+  output$download_refi_qda <- downloadHandler(
+    filename = function() paste0("project_refi_", Sys.Date(), ".qde"),
+    content = function(file) {
+      req(rv$docs)
+      export_refi_qda(rv$codigosDF, rv$tabla, rv$docs, file)
+    }
+  )
+
+  observeEvent(input$btn_sugerir_codigos, {
+    req(rv$docs, length(rv$docs) > 0)
+    api_key <- input$openai_api_key
+    if (is.null(api_key) || !nzchar(api_key)) {
+      showNotification("Enter OpenAI API Key first", type = "error")
+      return()
+    }
+    withProgress(message = "Analyzing corpus with AI...", value = 0.5, {
+      tryCatch({
+        textos <- sapply(rv$docs, function(d) d$original)
+        sugerencias <- sugerir_codigos_corpus(textos, api_key, n_codes = 15, lang = current_lang())
+        rv$ai_code_suggestions <- sugerencias
+        showNotification(paste0("Got ", nrow(sugerencias), " code suggestions"), type = "message")
+      }, error = function(e) showNotification(paste("Error:", e$message), type = "error"))
+    })
+  })
+
+  output$tabla_sugerencias <- renderDT({
+    req(rv$ai_code_suggestions)
+    datatable(rv$ai_code_suggestions, options = list(pageLength = 10), rownames = FALSE)
+  })
+
+  observeEvent(input$btn_aplicar_sugerencias, {
+    req(rv$ai_code_suggestions)
+    sugerencias <- rv$ai_code_suggestions
+    colors <- c("#3498db", "#e74c3c", "#27ae60", "#f39c12", "#9b59b6", "#1abc9c", "#34495e", "#d35400")
+    for (i in seq_len(nrow(sugerencias))) {
+      if (!sugerencias$Codigo[i] %in% rv$codigosDF$Codigo) {
+        new_row <- tibble(Codigo = sugerencias$Codigo[i], Color = colors[(i - 1) %% length(colors) + 1], Parent = "")
+        rv$codigosDF <- bind_rows(rv$codigosDF, new_row)
+      }
+    }
+    log_action("APPLY_AI_SUGGESTIONS", paste(nrow(sugerencias), "codes"))
+    showNotification("Suggestions applied", type = "message")
+  })
+
+  # ========================================
+  # GROUPS (code + doc)
+  # ========================================
+
+  observe({
+    if (!is.null(rv$docs)) {
+      updateSelectInput(session, "miembros_doc_group", choices = sapply(rv$docs, function(d) d$name))
+    }
+  })
+
+  observeEvent(input$crear_code_group, {
+    req(nzchar(trimws(input$nuevo_code_group)), length(input$miembros_code_group) > 0)
+    rv$code_groups[[input$nuevo_code_group]] <- input$miembros_code_group
+    log_action("CREATE_CODE_GROUP", input$nuevo_code_group)
+    showNotification("Group created", type = "message")
+  })
+
+  observeEvent(input$eliminar_code_group, {
+    sel <- input$tabla_code_groups_rows_selected
+    req(length(sel) == 1)
+    group_name <- names(rv$code_groups)[sel]
+    rv$code_groups[[group_name]] <- NULL
+    log_action("DELETE_CODE_GROUP", group_name)
+    showNotification("Group deleted", type = "warning")
+  })
+
+  output$tabla_code_groups <- renderDT({
+    if (length(rv$code_groups) == 0) return(datatable(tibble(Mensaje = "No groups"), options = list(dom = 't'), rownames = FALSE))
+    df <- tibble(
+      Grupo = names(rv$code_groups),
+      Miembros = sapply(rv$code_groups, function(g) paste(g, collapse = ", ")),
+      N = sapply(rv$code_groups, length)
+    )
+    datatable(df, selection = "single", options = list(pageLength = 10), rownames = FALSE)
+  })
+
+  observeEvent(input$crear_doc_group, {
+    req(nzchar(trimws(input$nuevo_doc_group)), length(input$miembros_doc_group) > 0)
+    rv$doc_groups[[input$nuevo_doc_group]] <- input$miembros_doc_group
+    log_action("CREATE_DOC_GROUP", input$nuevo_doc_group)
+    showNotification("Group created", type = "message")
+  })
+
+  observeEvent(input$eliminar_doc_group, {
+    sel <- input$tabla_doc_groups_rows_selected
+    req(length(sel) == 1)
+    group_name <- names(rv$doc_groups)[sel]
+    rv$doc_groups[[group_name]] <- NULL
+    log_action("DELETE_DOC_GROUP", group_name)
+    showNotification("Group deleted", type = "warning")
+  })
+
+  output$tabla_doc_groups <- renderDT({
+    if (length(rv$doc_groups) == 0) return(datatable(tibble(Mensaje = "No groups"), options = list(dom = 't'), rownames = FALSE))
+    df <- tibble(
+      Grupo = names(rv$doc_groups),
+      Miembros = sapply(rv$doc_groups, function(g) paste(g, collapse = ", ")),
+      N = sapply(rv$doc_groups, length)
+    )
+    datatable(df, selection = "single", options = list(pageLength = 10), rownames = FALSE)
+  })
+
+  # ========================================
+  # RESEARCH QUESTIONS
+  # ========================================
+
+  observeEvent(input$guardar_rq, {
+    req(nzchar(trimws(input$nueva_rq)))
+    new_rq <- tibble(
+      pregunta = input$nueva_rq,
+      codigos = paste(input$rq_codigos, collapse = ", "),
+      timestamp = Sys.time()
+    )
+    rv$research_questions <- bind_rows(rv$research_questions, new_rq)
+    log_action("SAVE_RESEARCH_Q", stringr::str_trunc(input$nueva_rq, 50))
+    updateTextAreaInput(session, "nueva_rq", value = "")
+    showNotification("Question saved", type = "message")
+  })
+
+  observeEvent(input$eliminar_rq, {
+    sel <- input$tabla_rq_rows_selected
+    req(length(sel) == 1)
+    rv$research_questions <- rv$research_questions[-sel, ]
+    showNotification("Question deleted", type = "warning")
+  })
+
+  output$tabla_rq <- renderDT({
+    if (nrow(rv$research_questions) == 0) return(datatable(tibble(Mensaje = "No questions"), options = list(dom = 't'), rownames = FALSE))
+    datatable(rv$research_questions, selection = "single", options = list(pageLength = 10), rownames = FALSE)
+  })
+
+  # ========================================
+  # TOPIC MODELING
+  # ========================================
+
+  observeEvent(input$btn_generar_topics, {
+    req(rv$docs, length(rv$docs) > 0)
+    withProgress(message = "Running LDA...", value = 0.5, {
+      tryCatch({
+        textos <- sapply(rv$docs, function(d) d$original)
+        nombres <- sapply(rv$docs, function(d) d$name)
+        result <- generar_topics_lda(textos, nombres, n_topics = input$n_topicos, idioma = input$topic_idioma)
+        rv$topic_model_result <- result
+        log_action("TOPIC_MODELING", paste(input$n_topicos, "topics"))
+        showNotification("Topic model generated", type = "message")
+      }, error = function(e) showNotification(paste("Error:", e$message), type = "error"))
+    })
+  })
+
+  output$plot_topics <- renderPlot({
+    req(rv$topic_model_result)
+    plot_topics(rv$topic_model_result)
+  }, bg = "white")
+
+  output$tabla_doc_topics <- renderDT({
+    req(rv$topic_model_result)
+    datatable(rv$topic_model_result$doc_topics, options = list(pageLength = 15), rownames = FALSE) %>%
+      formatRound("gamma", 3)
+  })
+
+  # ========================================
+  # SENTIMENT ANALYSIS
+  # ========================================
+
+  observeEvent(input$btn_analizar_sentiment, {
+    req(nrow(rv$tabla) > 0)
+    api_key <- input$openai_api_key
+    if (is.null(api_key) || !nzchar(api_key)) {
+      showNotification("Enter OpenAI API Key first", type = "error")
+      return()
+    }
+    withProgress(message = "Analyzing sentiment...", value = 0.5, {
+      tryCatch({
+        fragmentos <- rv$tabla$Extracto
+        result <- sentiment_analysis_llm(fragmentos, api_key, lang = current_lang())
+        rv$sentiment_results <- result
+        log_action("SENTIMENT_ANALYSIS", paste(nrow(result), "fragments"))
+        showNotification("Sentiment analyzed", type = "message")
+      }, error = function(e) showNotification(paste("Error:", e$message), type = "error"))
+    })
+  })
+
+  output$tabla_sentiment <- renderDT({
+    req(rv$sentiment_results)
+    datatable(rv$sentiment_results, options = list(pageLength = 10), rownames = FALSE)
+  })
+
+  output$plot_sentiment <- renderPlotly({
+    req(rv$sentiment_results)
+    counts <- rv$sentiment_results %>% count(Sentimiento)
+    colors_sent <- c("Positive" = "#27ae60", "Positivo" = "#27ae60",
+                     "Negative" = "#e74c3c", "Negativo" = "#e74c3c",
+                     "Neutral" = "#95a5a6", "Mixed" = "#f39c12", "Mixto" = "#f39c12")
+    plot_ly(counts, x = ~Sentimiento, y = ~n, type = "bar",
+            marker = list(color = ~colors_sent[Sentimiento])) %>%
+      layout(yaxis = list(title = "Count"), xaxis = list(title = ""))
+  })
+
+  # ========================================
+  # NER
+  # ========================================
+
+  observeEvent(input$btn_extraer_ner, {
+    req(rv$docs, length(rv$docs) > 0)
+    api_key <- input$openai_api_key
+    if (is.null(api_key) || !nzchar(api_key)) {
+      showNotification("Enter OpenAI API Key first", type = "error")
+      return()
+    }
+    withProgress(message = "Extracting entities...", value = 0.5, {
+      tryCatch({
+        textos <- sapply(rv$docs, function(d) d$original)
+        nombres <- sapply(rv$docs, function(d) d$name)
+        result <- ner_llm(textos, nombres, api_key, lang = current_lang())
+        rv$ner_results <- result
+        log_action("NER_EXTRACTION", paste(nrow(result), "entities"))
+        showNotification("Entities extracted", type = "message")
+      }, error = function(e) showNotification(paste("Error:", e$message), type = "error"))
+    })
+  })
+
+  output$tabla_ner <- renderDT({
+    req(rv$ner_results)
+    datatable(rv$ner_results, options = list(pageLength = 15, scrollX = TRUE), rownames = FALSE)
+  })
+
+  # ========================================
+  # INTERCODER RELIABILITY
+  # ========================================
+
+  observeEvent(input$coder2_file, {
+    req(input$coder2_file)
+    tryCatch({
+      estado2 <- readRDS(input$coder2_file$datapath)
+      rv$coder2_tabla <- estado2$tabla
+      showNotification("Coder 2 project loaded", type = "message")
+    }, error = function(e) showNotification(paste("Error:", e$message), type = "error"))
+  })
+
+  observeEvent(input$btn_calc_reliability, {
+    req(rv$tabla, rv$coder2_tabla)
+    tryCatch({
+      # Match fragments by Extracto
+      merged <- rv$tabla %>%
+        inner_join(rv$coder2_tabla, by = "Extracto", suffix = c("_1", "_2"))
+      if (nrow(merged) < 2) {
+        showNotification("Not enough matching fragments", type = "error")
+        return()
+      }
+      result <- calcular_reliability(merged$Codigo_1, merged$Codigo_2)
+      rv$reliability_result <- result
+      log_action("RELIABILITY", paste("Kappa =", result$kappa_cohen))
+    }, error = function(e) showNotification(paste("Error:", e$message), type = "error"))
+  })
+
+  output$reliability_summary <- renderUI({
+    req(rv$reliability_result)
+    r <- rv$reliability_result
+    div(
+      div(class = "info-panel",
+          h4(paste0(tr("reliability.kappa_cohen"), ": ", r$kappa_cohen)),
+          p(interpretar_kappa(r$kappa_cohen, current_lang())),
+          p(paste0(tr("reliability.kappa_bp"), ": ", r$kappa_bp)),
+          p(paste0(tr("reliability.acuerdo"), ": ", round(r$percent_agreement * 100, 1), "%")),
+          p(paste0(tr("reliability.n_fragmentos"), ": ", r$n_total))
+      )
+    )
+  })
+
+  output$tabla_confusion <- renderDT({
+    req(rv$reliability_result)
+    datatable(rv$reliability_result$confusion_matrix, options = list(scrollX = TRUE))
+  })
+
+  # ========================================
+  # AUDIT TRAIL
+  # ========================================
+
+  output$tabla_audit <- renderDT({
+    if (nrow(rv$audit_log) == 0) return(datatable(tibble(Mensaje = "No log entries"), options = list(dom = 't'), rownames = FALSE))
+    display <- rv$audit_log %>%
+      arrange(desc(Timestamp)) %>%
+      mutate(Timestamp = format(Timestamp, "%Y-%m-%d %H:%M:%S"))
+    datatable(display, options = list(pageLength = 30), rownames = FALSE)
+  })
+
+  output$download_audit <- downloadHandler(
+    filename = function() paste0("audit_log_", Sys.Date(), ".xlsx"),
+    content = function(file) {
+      wb <- createWorkbook()
+      addWorksheet(wb, "Audit")
+      writeData(wb, "Audit", rv$audit_log)
+      saveWorkbook(wb, file, overwrite = TRUE)
+    }
+  )
+
+  observeEvent(input$clear_audit, {
+    rv$audit_log <- rv$audit_log[0, ]
+    showNotification("Log cleared", type = "warning")
+  })
+
+  # ========================================
+  # AUTO-SAVE (every 5 minutes)
+  # ========================================
+
+  observe({
+    invalidateLater(5 * 60 * 1000, session)  # 5 minutes
+    if (!is.null(rv$tabla) && nrow(rv$tabla) > 0) {
+      tryCatch({
+        tmp_dir <- tempdir()
+        tmp_file <- file.path(tmp_dir, "rcualitext_autosave.rds")
+        estado <- isolate({
+          list(
+            codigosDF = rv$codigosDF, categoriasDF = rv$categoriasDF,
+            docs = rv$docs, tabla = rv$tabla, memos = rv$memos,
+            descriptores = rv$descriptores, code_groups = rv$code_groups,
+            doc_groups = rv$doc_groups, research_questions = rv$research_questions,
+            bookmarks = rv$bookmarks, audit_log = rv$audit_log
+          )
+        })
+        saveRDS(estado, tmp_file)
+        rv$last_autosave <- Sys.time()
+      }, error = function(e) NULL)
+    }
+  })
+
+  # ========================================
+  # Pro-feature modules (new improvements)
+  # ========================================
+  setup_multimedia_server(input, output, session, rv)
+  setup_collab_server(input, output, session, rv)
+  setup_query_server(input, output, session, rv)
+  setup_viz_extra_server(input, output, session, rv)
+  setup_hyperlinks_server(input, output, session, rv)
+  setup_versioning_server(input, output, session, rv)
+  setup_performance_server(input, output, session, rv)
+  setup_mixed_stats_server(input, output, session, rv)
+  setup_templates_server(input, output, session, rv)
+  setup_ux_enhance_server(input, output, session, rv)
 }
 
 # ========================================

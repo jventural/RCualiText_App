@@ -11,3 +11,15 @@ Thumbs.db
 # Temporary files
 *.log
 *~
+
+# Backups (do not deploy)
+*.bak_*
+
+# Secrets / service accounts (NEVER commit)
+*.json
+!manifest.json
+personal-*.json
+service-account*.json
+credentials*.json
+.env
+.env.*
