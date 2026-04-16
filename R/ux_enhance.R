@@ -103,11 +103,11 @@ ux_shortcut_js <- "
 setup_ux_enhance_server <- function(input, output, session, rv) {
   observeEvent(input$ux_dark_mode, {
     session$sendCustomMessage("ux_toggle_dark", isTRUE(input$ux_dark_mode))
-  }, ignoreInit = FALSE)
+  }, ignoreInit = TRUE)
 
   observeEvent(input$ux_font_scale, {
     session$sendCustomMessage("ux_font_scale", input$ux_font_scale %||% 1)
-  }, ignoreInit = FALSE)
+  }, ignoreInit = TRUE)
 
   # Code shortcut 1-9
   observeEvent(input$ux_kbd_code, {
