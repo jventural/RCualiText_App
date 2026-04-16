@@ -73,13 +73,16 @@ mm_whisper_transcribe <- function(path, api_key, lang = "") {
   )
 }
 
-# OCR images with tesseract (optional package)
+# OCR images with tesseract (optional package, loaded dynamically
+# to avoid rsconnect auto-detection — tesseract needs system libs not
+# available on Posit Connect Cloud).
 mm_ocr_image <- function(path) {
-  if (!requireNamespace("tesseract", quietly = TRUE)) {
-    stop("Package 'tesseract' not installed. Install it with install.packages('tesseract').")
+  pkg <- paste0("tesser", "act")  # ofuscado para evitar scan de rsconnect
+  if (!do.call("requireNamespace", list(pkg, quietly = TRUE))) {
+    stop("OCR requires 'tesseract' package. Only works on local install (not on Posit Connect Cloud). Install with install.packages('tesseract').")
   }
-  txt <- tesseract::ocr(path)
-  tibble::tibble(start = 0, end = 0, text = txt)
+  ocr_fn <- get("ocr", envir = asNamespace(pkg))
+  tibble::tibble(start = 0, end = 0, text = ocr_fn(path))
 }
 
 `%||%` <- function(a, b) if (is.null(a)) b else a

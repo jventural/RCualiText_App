@@ -39,7 +39,9 @@ library(rhandsontable)
 # Si no están instaladas, la app sigue funcionando; solo las features que dependen de ellas mostrarán error al usarlas
 optional_libs <- c("xml2", "topicmodels", "textstem",
                    "visNetwork", "base64enc", "markdown",
-                   "DBI", "RSQLite", "text2vec", "tesseract", "QCA")
+                   "DBI", "RSQLite", "text2vec", "QCA")
+# NOTA: 'tesseract' se carga lazy en R/multimedia.R (requiere libtesseract-dev
+# del sistema que Posit Connect Cloud no provee; solo funciona en instalacion local)
 for (lib in optional_libs) {
   tryCatch(
     suppressPackageStartupMessages(library(lib, character.only = TRUE)),
