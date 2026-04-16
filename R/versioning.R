@@ -72,16 +72,19 @@ ver_save_snapshot <- function(rv, dir, keep = 10) {
   if (!dir.exists(dir)) dir.create(dir, recursive = TRUE, showWarnings = FALSE)
   ts <- format(Sys.time(), "%Y%m%d_%H%M%S")
   path <- file.path(dir, paste0("snap_", ts, ".rds"))
-  estado <- list(
-    codigosDF = rv$codigosDF, categoriasDF = rv$categoriasDF,
-    docs = rv$docs, tabla = rv$tabla, memos = rv$memos,
-    descriptores = rv$descriptores,
-    code_groups = rv$code_groups, doc_groups = rv$doc_groups,
-    research_questions = rv$research_questions,
-    bookmarks = rv$bookmarks, audit_log = rv$audit_log,
-    hyperlinks = rv$hyperlinks, coders = rv$coders,
-    saved_at = Sys.time()
-  )
+  # Read rv inside isolate to avoid creating reactive deps that re-fire the calling observer
+  estado <- shiny::isolate({
+    list(
+      codigosDF = rv$codigosDF, categoriasDF = rv$categoriasDF,
+      docs = rv$docs, tabla = rv$tabla, memos = rv$memos,
+      descriptores = rv$descriptores,
+      code_groups = rv$code_groups, doc_groups = rv$doc_groups,
+      research_questions = rv$research_questions,
+      bookmarks = rv$bookmarks, audit_log = rv$audit_log,
+      hyperlinks = rv$hyperlinks, coders = rv$coders,
+      saved_at = Sys.time()
+    )
+  })
   saveRDS(estado, path)
   # Rotation
   files <- list.files(dir, pattern = "\\.rds$", full.names = TRUE)
@@ -98,15 +101,22 @@ setup_versioning_server <- function(input, output, session, rv) {
   rv_status <- reactiveValues(last = "never", n = 0)
 
   # Auto-save observer
+  # IMPORTANT: rv reads must be isolated to avoid creating reactive deps that
+  # retrigger the observer in a hot loop (which floods the WS message queue
+  # and blocks initial output values from being flushed to the client).
   observe({
-    req(input$ver_autosave_on)
-    invalidateLater(max(60, (input$ver_interval %||% 5) * 60) * 1000, session)
-    tryCatch({
-      p <- ver_save_snapshot(rv, input$ver_dir, input$ver_keep)
-      rv_status$last <- format(Sys.time(), "%Y-%m-%d %H:%M:%S")
-      rv_status$n <- rv_status$n + 1
-    }, error = function(e) NULL)
-  })
+    # Require inputs to be initialized before running (avoids spurious fire on init)
+    req(input$ver_autosave_on, input$ver_dir, input$ver_interval, input$ver_keep)
+    wait_ms <- max(60, (input$ver_interval %||% 5) * 60) * 1000
+    invalidateLater(wait_ms, session)
+    isolate({
+      tryCatch({
+        p <- ver_save_snapshot(rv, input$ver_dir, input$ver_keep)
+        rv_status$last <- format(Sys.time(), "%Y-%m-%d %H:%M:%S")
+        rv_status$n <- rv_status$n + 1
+      }, error = function(e) NULL)
+    })
+  }, priority = -100)
 
   observeEvent(input$ver_save_now, {
     tryCatch({
@@ -125,6 +135,7 @@ setup_versioning_server <- function(input, output, session, rv) {
   })
 
   snapshots_r <- reactive({
+    req(input$ver_dir)
     invalidateLater(5000, session)
     ver_snapshot_list(input$ver_dir %||% file.path(tempdir(), "rcualitext_versions"))
   })

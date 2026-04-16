@@ -3322,6 +3322,8 @@ server <- function(input, output, session) {
     )
   })
 
+  # Force login_form_ui to render even before client reports visibility (login overlay is visible from start)
+  outputOptions(output, "login_form_ui", suspendWhenHidden = FALSE)
   # Error display helpers
   output$show_registro_error <- reactive({ nchar(error_registro()) > 0 })
   outputOptions(output, "show_registro_error", suspendWhenHidden = FALSE)
@@ -8037,6 +8039,7 @@ server <- function(input, output, session) {
   # ========================================
   # Pro-feature modules (new improvements)
   # ========================================
+  # TEMP DISABLED FOR DEBUG - bisect
   setup_multimedia_server(input, output, session, rv)
   setup_collab_server(input, output, session, rv)
   setup_query_server(input, output, session, rv)
