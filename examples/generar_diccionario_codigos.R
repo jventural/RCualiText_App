@@ -1,6 +1,7 @@
-# Diccionario de codigos para subir en Analisis IA > Code Dictionary
-# Tema: experiencia de tesistas universitarios (entrevistas del demo)
-# Columnas requeridas por RCualiText: category, code, definition
+# Diccionario de codigos para Analisis IA > Code Dictionary
+# ALINEADO con los 6 codigos del proyecto_demo_tutorial.rds:
+#   Motivacion, Metodologia, Asesor, Tiempo, Apoyo emocional, Obstaculos
+# en 3 categorias: Factores personales, institucionales, sociales.
 
 library(openxlsx)
 
@@ -8,85 +9,42 @@ OUT_DIR <- "D:/16_Shinys/RCualiText_App/examples"
 
 dic <- data.frame(
   category = c(
-    rep("Factores personales", 7),
-    rep("Factores institucionales", 6),
-    rep("Factores sociales", 5),
-    rep("Factores economicos y laborales", 3),
-    rep("Experiencias emocionales", 5)
+    # Factores personales (3)
+    "Factores personales",
+    "Factores personales",
+    "Factores personales",
+    # Factores institucionales (2)
+    "Factores institucionales",
+    "Factores institucionales",
+    # Factores sociales (1)
+    "Factores sociales"
   ),
   code = c(
-    # --- Factores personales ---
-    "motivacion_intrinseca",
-    "autoeficacia",
-    "autoexigencia_perfeccionismo",
-    "gestion_del_tiempo",
-    "salud_mental",
-    "estrategias_afrontamiento",
-    "procrastinacion_evitacion",
-    # --- Factores institucionales ---
-    "asesor_distante",
-    "asesor_exigente",
-    "asesor_sobreinvolucrado",
-    "metodologia_investigacion",
-    "burocracia_universitaria",
-    "recursos_universidad",
-    # --- Factores sociales ---
-    "apoyo_familiar",
-    "apoyo_pareja",
-    "grupo_pares_tesistas",
-    "comparacion_social",
-    "aislamiento_academico",
-    # --- Factores economicos y laborales ---
-    "trabajo_paralelo",
-    "sacrificio_economico",
-    "necesidad_financiamiento",
-    # --- Experiencias emocionales ---
-    "crisis_abandono",
-    "logro_avance",
-    "proceso_transformador",
-    "emocion_negativa",
-    "emocion_positiva"
+    "Motivacion",
+    "Tiempo",
+    "Obstaculos",
+    "Metodologia",
+    "Asesor",
+    "Apoyo emocional"
   ),
   definition = c(
     # --- Factores personales ---
-    "Razones internas, pasion o intereses personales del tesista que lo impulsan a realizar la tesis (ej: tema que le duele, vocacion, conviccion etica).",
-    "Creencia del tesista sobre su propia capacidad para completar la tesis; confianza o inseguridad frente a los retos academicos.",
-    "Exigencia interna desproporcionada, estandares perfeccionistas que bloquean el avance o generan insatisfaccion con el propio trabajo.",
-    "Descripciones sobre como el tesista organiza, planifica o falla en administrar el tiempo disponible para la tesis.",
-    "Menciones de ansiedad, depresion, burnout, insomnio, atencion psicologica o psiquiatrica, trastornos o sintomas mentales atribuidos al proceso.",
-    "Tacticas, rutinas o estrategias concretas que el tesista aplica para manejar dificultades (ej: Pomodoro, escribir mal, dividir tareas).",
-    "Conductas de postergacion, evitacion del trabajo, uso de distractores (Netflix, redes) para no enfrentar la tesis."
-  ,
+    "Razones internas, pasion, vocacion o intereses personales del tesista que lo impulsan a realizar la investigacion. Incluye expresiones sobre que le apasiona el tema, se identifica con el problema, quiere aportar a su campo, o tiene una motivacion etica. Ejemplo: 'elegi este tema porque me duele, tengo familia en zonas rurales sin agua'.",
+    "Descripciones sobre como el tesista administra, planifica, pierde o sacrifica el tiempo para avanzar la tesis. Incluye: jornadas dobles, trabajo nocturno, falta de horas, carga horaria, sacrificios de ocio/gimnasio/amigos, percepcion de plazos apretados, cansancio por exceso de horas dedicadas. Ejemplo: 'la tesis la hago de noche y los domingos', 'he vivido a punta de cafe este ultimo anio'.",
+    "Menciones de obstaculos, barreras o dificultades concretas en el proceso: bloqueos de escritura, salud mental afectada, problemas tecnicos (grabadora, laptop), crisis de abandono, procrastinacion, parálisis por perfeccionismo, comparacion con otros, falta de autoeficacia, problemas de muestreo, rechazo institucional. Ejemplo: 'estoy paralizada, cada vez que abro Word borro lo que escribo', 'la empresa me cancelo el convenio'.",
     # --- Factores institucionales ---
-    "Descripciones del asesor como poco disponible, con respuestas tardias, falta de feedback sustantivo o ausencia de seguimiento.",
-    "Asesor descrito como duro, demandante, con altas expectativas y retroalimentacion critica pero comprometido con la formacion.",
-    "Asesor con presencia excesiva, intrusiva, demandas fuera de horario, vigilancia constante del avance o perdida de autonomia del tesista.",
-    "Referencias a aspectos metodologicos de la investigacion: diseno, muestreo, instrumentos, analisis de datos, validez, rigor cientifico.",
-    "Tramites, requisitos, reglamentos, plazos institucionales que generan friccion o retrasos al proceso de tesis.",
-    "Servicios de la universidad que el tesista uso o valoro (biblioteca, psicologia universitaria, talleres, asesorias metodologicas, plataformas).",
+    "Referencias a aspectos metodologicos de la investigacion: diseno de estudio, muestreo, instrumentos, analisis de datos (SPSS, software cuantitativo o cualitativo), validez, codificacion, entrevistas, grupos focales, saturacion teorica, triangulacion, calidad del rigor cientifico. Ejemplo: 'estoy en analisis de datos, apliqué un instrumento a 312 universitarios', 'mi tesis es cualitativa, llevo 7 entrevistas'.",
+    "Descripciones sobre la figura y rol del asesor/a: disponibilidad, estilo de supervision, feedback, exigencia, relacion de trabajo, conflictos o satisfaccion con el acompanamiento. Incluye asesor distante, exigente, sobreinvolucrado, comprometido, ausente, critico o paciente. Ejemplo: 'el doctor Mendoza es duro pero me esta formando', 'mi asesora me llama los domingos a las 8 de la manana'.",
     # --- Factores sociales ---
-    "Soporte emocional, consejos o ayuda practica de familiares (padres, hermanos) durante el proceso de tesis.",
-    "Apoyo, paciencia o tension con la pareja/conyugue derivada de la dedicacion a la tesis (incluidas rupturas por la tesis).",
-    "Relaciones con otros tesistas (grupos de estudio, WhatsApp, amistades academicas) que sirven como soporte emocional o tecnico.",
-    "Menciones donde el tesista se compara con companeros (ritmo, logros, publicaciones) generando ansiedad, envidia o sensacion de retraso.",
-    "Percepcion de soledad durante el proceso, falta de red de apoyo, encierro social, sensacion de estar solo frente al trabajo.",
-    # --- Factores economicos y laborales ---
-    "Compatibilizacion entre trabajo remunerado y tesis, incluyendo cansancio, jornada doble, horarios restringidos.",
-    "Gastos asociados a la tesis (estadistico, impresiones, conferencias, datos) y el esfuerzo economico que implican.",
-    "Necesidad de financiamiento, becas, apoyo economico para poder continuar; preocupaciones economicas del tesista.",
-    # --- Experiencias emocionales ---
-    "Momentos concretos en que el tesista penso en abandonar, considero retirar la tesis, tuvo crisis de desmotivacion aguda o quiso rendirse.",
-    "Satisfaccion por avances concretos: capitulo terminado, aprobacion del tribunal, defensa exitosa, reconocimiento del asesor.",
-    "Reflexiones sobre como el proceso cambio al tesista: aprendizajes personales, cambio de perspectiva, habilidades nuevas, madurez.",
-    "Expresiones de tristeza, frustracion, rabia, impotencia, miedo, culpa, agotamiento vinculadas al proceso de tesis.",
-    "Expresiones de alegria, orgullo, esperanza, gratitud, alivio asociadas con momentos o personas durante la tesis."
+    "Soporte emocional, consejos o ayuda practica recibidos de red social cercana: familia (padres, hermanos), pareja/conyuge, companeros tesistas, amigos, grupos de WhatsApp, psicologos o psiquiatras. Tambien incluye sensacion de aislamiento academico o soledad por falta de esta red. Ejemplo: 'mi papa me dijo no abandones', 'un grupo de Facebook de tesistas con TDAH me cambio la perspectiva'."
   ),
   stringsAsFactors = FALSE
 )
 
-# Verificar consistencia
-stopifnot(length(dic$category) == length(dic$code))
-stopifnot(length(dic$code) == length(dic$definition))
+# Verificar consistencia con los codigos del demo
+codigos_esperados <- c("Motivacion", "Metodologia", "Asesor",
+                       "Tiempo", "Apoyo emocional", "Obstaculos")
+stopifnot(setequal(dic$code, codigos_esperados))
 stopifnot(!any(duplicated(dic$code)))
 
 # Exportar xlsx con formato
@@ -94,7 +52,7 @@ wb <- createWorkbook()
 addWorksheet(wb, "Diccionario")
 writeData(wb, "Diccionario", dic)
 
-# Formato header
+# Estilo header
 hs <- createStyle(
   fontColour = "#FFFFFF", fgFill = "#2980b9",
   halign = "center", textDecoration = "bold",
@@ -102,13 +60,11 @@ hs <- createStyle(
 )
 addStyle(wb, "Diccionario", hs, rows = 1, cols = 1:3, gridExpand = TRUE)
 
-# Color por categoria (consistente con CAT_PALETTE de la app)
+# Colores de fondo por categoria (misma logica que CAT_PALETTE pero suavizados)
 cat_colors <- c(
-  "Factores personales"             = "#FDEDEC",
-  "Factores institucionales"        = "#F4ECF7",
-  "Factores sociales"               = "#E8F8F0",
-  "Factores economicos y laborales" = "#FEF5E7",
-  "Experiencias emocionales"        = "#EAF2F8"
+  "Factores personales"      = "#FDEDEC",
+  "Factores institucionales" = "#F4ECF7",
+  "Factores sociales"        = "#E8F8F0"
 )
 for (i in seq_len(nrow(dic))) {
   col <- cat_colors[dic$category[i]]
@@ -120,27 +76,27 @@ for (i in seq_len(nrow(dic))) {
   }
 }
 
-# Anchos de columna
-setColWidths(wb, "Diccionario", cols = 1, widths = 32)
-setColWidths(wb, "Diccionario", cols = 2, widths = 32)
-setColWidths(wb, "Diccionario", cols = 3, widths = 90)
-
-# Freeze header
+setColWidths(wb, "Diccionario", cols = 1, widths = 28)
+setColWidths(wb, "Diccionario", cols = 2, widths = 22)
+setColWidths(wb, "Diccionario", cols = 3, widths = 110)
 freezePane(wb, "Diccionario", firstActiveRow = 2)
 
 xlsx_path <- file.path(OUT_DIR, "diccionario_codigos_tesistas.xlsx")
 saveWorkbook(wb, xlsx_path, overwrite = TRUE)
 
-# Version CSV tambien (UTF-8 con BOM para Excel en Windows)
+# CSV con BOM UTF-8
 csv_path <- file.path(OUT_DIR, "diccionario_codigos_tesistas.csv")
 con <- file(csv_path, open = "wb")
-writeBin(charToRaw("\ufeff"), con)  # BOM
+writeBin(charToRaw("\ufeff"), con)
 close(con)
 write.table(dic, csv_path, sep = ",", row.names = FALSE,
             fileEncoding = "UTF-8", append = TRUE, col.names = TRUE)
 
-cat("Diccionario generado:\n")
-cat(" -", xlsx_path, "(", nrow(dic), "codigos en", length(unique(dic$category)), "categorias)\n")
-cat(" -", csv_path, "\n")
-cat("\nDistribucion por categoria:\n")
-print(table(dic$category))
+cat("Diccionario ALINEADO con el .rds demo:\n")
+cat("  ", xlsx_path, "\n")
+cat("  ", csv_path, "\n")
+cat("\n", nrow(dic), "codigos en", length(unique(dic$category)), "categorias:\n")
+for (c in unique(dic$category)) {
+  codes <- dic$code[dic$category == c]
+  cat(sprintf("  - %s: %s\n", c, paste(codes, collapse = ", ")))
+}
