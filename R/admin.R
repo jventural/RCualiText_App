@@ -70,6 +70,14 @@ admin_tab_ui <- function() {
                               icon = icon("user-tag"),
                               class = "btn-info btn-block"))
         ),
+        br(),
+        fluidRow(
+          column(12,
+                 actionButton("admin_btn_delete", "Eliminar usuario (permanente)",
+                              icon = icon("trash"),
+                              class = "btn-danger btn-block",
+                              style = "background: #c0392b; border-color: #922b21;"))
+        ),
         hr(),
         uiOutput("admin_action_result")
       )
@@ -244,6 +252,57 @@ setup_admin_server <- function(input, output, session, rv) {
             tags$p("Esta contrasena NO se volvera a mostrar. Guardala."),
             tags$pre(style = "font-size: 14px; background: #fff; padding: 10px;",
                      new_pwd)))
+    }, error = function(e) {
+      output$admin_action_result <- renderUI(
+        div(class = "alert alert-danger", conditionMessage(e)))
+    })
+  })
+
+  # ---- Eliminar usuario (con confirmacion modal) ----
+  observeEvent(input$admin_btn_delete, {
+    req(is_admin())
+    usr <- selected_user()
+    if (is.null(usr)) {
+      output$admin_action_result <- renderUI(
+        div(class = "alert alert-warning",
+            "Selecciona primero un usuario en la tabla"))
+      return()
+    }
+    if (identical(tolower(usr), tolower(rv$current_user$usuario))) {
+      output$admin_action_result <- renderUI(
+        div(class = "alert alert-danger",
+            "No puedes eliminarte a ti mismo"))
+      return()
+    }
+    showModal(modalDialog(
+      title = tagList(icon("exclamation-triangle"),
+                      " Confirmar eliminacion"),
+      tags$p("Estas a punto de eliminar permanentemente al usuario:"),
+      tags$pre(style = "background: #fff3cd; padding: 10px; font-size: 16px;",
+               usr),
+      tags$p(tags$strong("Esta accion no se puede deshacer."),
+             " Se borrara la fila completa de la hoja Usuarios."),
+      tags$p(tags$em("Alternativa: si solo quieres bloquear acceso temporalmente, usa 'Activar/Desactivar' en lugar de eliminar.")),
+      footer = tagList(
+        modalButton("Cancelar"),
+        actionButton("admin_btn_delete_confirm", "Si, eliminar",
+                     class = "btn-danger", icon = icon("trash"))
+      ),
+      easyClose = FALSE, size = "m"
+    ))
+  })
+
+  observeEvent(input$admin_btn_delete_confirm, {
+    removeModal()
+    usr <- selected_user()
+    if (is.null(usr)) return()
+    if (identical(tolower(usr), tolower(rv$current_user$usuario))) return()
+    tryCatch({
+      auth_delete_user(usr)
+      users_trigger(users_trigger() + 1)
+      output$admin_action_result <- renderUI(
+        div(class = "alert alert-success",
+            icon("check"), paste0(" Usuario '", usr, "' eliminado.")))
     }, error = function(e) {
       output$admin_action_result <- renderUI(
         div(class = "alert alert-danger", conditionMessage(e)))

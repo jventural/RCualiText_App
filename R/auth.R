@@ -168,6 +168,20 @@ auth_set_role <- function(usuario, rol) {
   auth_update_row(usuario, list(rol = rol))
 }
 
+# Elimina permanentemente la fila del usuario en la hoja.
+# No se puede deshacer (considerar auth_set_active() para reversible).
+auth_delete_user <- function(usuario) {
+  sid <- auth_users_sheet_id()
+  if (is.na(sid)) stop("No sheet id")
+  df <- auth_read_all()
+  if (is.null(df) || nrow(df) == 0) stop("Hoja vacia")
+  idx <- which(tolower(df$usuario) == tolower(usuario))
+  if (length(idx) == 0) stop("Usuario no encontrado: ", usuario)
+  df <- df[-idx, , drop = FALSE]
+  googlesheets4::sheet_write(df, ss = sid, sheet = AUTH_SHEET_NAME)
+  invisible(TRUE)
+}
+
 # ---- Autenticacion ----
 
 # Resultado:
