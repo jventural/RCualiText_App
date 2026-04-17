@@ -4566,8 +4566,6 @@ server <- function(input, output, session) {
     
     # Actualizar UI
     output$contenido <- renderUI(HTML(rv$texto))
-    # Resetear scroll al top tras re-render (evita que el visor muestre el medio del doc)
-    shinyjs::runjs("setTimeout(function(){ var v = document.getElementById('document-viewer'); if (v) v.scrollTop = 0; }, 80);")
   })
   
   # Observar cambios para actualizar texto

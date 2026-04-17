@@ -307,6 +307,14 @@ body {
   margin-top: 10px !important;
 }
 
+/* Fix: shinycssloaders deja un spinner-placeholder con height:400px que empuja
+   el texto cargado hacia abajo dentro del Document Viewer. Lo colapsamos
+   siempre dentro del visor (el spinner sigue mostrandose via .load-container). */
+#document-viewer .shiny-spinner-placeholder {
+  display: none !important;
+  height: 0 !important;
+}
+
 #contenido > * {
   margin-top: 0 !important;
 }
