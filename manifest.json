@@ -3453,6 +3453,35 @@
         "Built": "R 4.4.3; ; 2025-10-03 03:49:56 UTC; windows"
       }
     },
+    "plyr": {
+      "Source": "CRAN",
+      "Repository": "https://cloud.r-project.org",
+      "description": {
+        "Package": "plyr",
+        "Title": "Tools for Splitting, Applying and Combining Data",
+        "Version": "1.8.9",
+        "Authors@R": "\n    person(\"Hadley\", \"Wickham\", , \"hadley@rstudio.com\", role = c(\"aut\", \"cre\"))",
+        "Description": "A set of tools that solves a common set of problems: you need\n    to break a big problem down into manageable pieces, operate on each\n    piece and then put all the pieces back together.  For example, you\n    might want to fit a model to each spatial location or time point in\n    your study, summarise data by panels or collapse high-dimensional\n    arrays to simpler summary statistics. The development of 'plyr' has\n    been generously supported by 'Becton Dickinson'.",
+        "License": "MIT + file LICENSE",
+        "URL": "http://had.co.nz/plyr, https://github.com/hadley/plyr",
+        "BugReports": "https://github.com/hadley/plyr/issues",
+        "Depends": "R (>= 3.1.0)",
+        "Imports": "Rcpp (>= 0.11.0)",
+        "Suggests": "abind, covr, doParallel, foreach, iterators, itertools,\ntcltk, testthat",
+        "LinkingTo": "Rcpp",
+        "Encoding": "UTF-8",
+        "LazyData": "true",
+        "RoxygenNote": "7.2.3",
+        "NeedsCompilation": "yes",
+        "Packaged": "2023-09-27 13:58:04 UTC; hadleywickham",
+        "Author": "Hadley Wickham [aut, cre]",
+        "Maintainer": "Hadley Wickham <hadley@rstudio.com>",
+        "Repository": "CRAN",
+        "Date/Publication": "2023-10-02 06:50:08 UTC",
+        "Built": "R 4.4.0; x86_64-w64-mingw32; 2024-04-23 01:16:51 UTC; windows",
+        "Archs": "x64"
+      }
+    },
     "png": {
       "Source": "CRAN",
       "Repository": "https://cloud.r-project.org",
@@ -4004,6 +4033,36 @@
         "Repository": "CRAN",
         "Date/Publication": "2024-07-06 13:50:01 UTC",
         "Built": "R 4.4.1; ; 2024-08-02 01:54:37 UTC; windows"
+      }
+    },
+    "reshape2": {
+      "Source": "CRAN",
+      "Repository": "https://cloud.r-project.org",
+      "description": {
+        "Package": "reshape2",
+        "Title": "Flexibly Reshape Data: A Reboot of the Reshape Package",
+        "Version": "1.4.5",
+        "Authors@R": "\n    person(\"Hadley\", \"Wickham\", , \"hadley@posit.co\", role = c(\"aut\", \"cre\"))",
+        "Description": "Flexibly restructure and aggregate data using just two\n    functions: melt and 'dcast' (or 'acast').",
+        "License": "MIT + file LICENSE",
+        "URL": "https://github.com/hadley/reshape",
+        "BugReports": "https://github.com/hadley/reshape/issues",
+        "Depends": "R (>= 3.1)",
+        "Imports": "plyr (>= 1.8.1), Rcpp, stringr",
+        "Suggests": "covr, lattice, testthat (>= 3.0.0)",
+        "LinkingTo": "Rcpp",
+        "Config/testthat/edition": "3",
+        "Encoding": "UTF-8",
+        "LazyData": "true",
+        "RoxygenNote": "7.3.3",
+        "NeedsCompilation": "yes",
+        "Packaged": "2025-11-11 14:12:59 UTC; hadleywickham",
+        "Author": "Hadley Wickham [aut, cre]",
+        "Maintainer": "Hadley Wickham <hadley@posit.co>",
+        "Repository": "CRAN",
+        "Date/Publication": "2025-11-12 06:20:11 UTC",
+        "Built": "R 4.4.3; x86_64-w64-mingw32; 2025-12-29 18:30:40 UTC; windows",
+        "Archs": "x64"
       }
     },
     "reticulate": {
@@ -5851,7 +5910,7 @@
       "checksum": "d293c0added8f722ef0bab15b917d9b1"
     },
     "app.R": {
-      "checksum": "bd00cb3820d6d4faa28f28e344516e76"
+      "checksum": "f7d13d8a1ecf25994fefe2900e24c0c4"
     },
     "app.R.bak_20260410_115613": {
       "checksum": "1b85739c9e545bbf1e1e22d8395a0721"
@@ -5859,11 +5918,20 @@
     "app.R.bak_pre_mejoras_20260416_163214": {
       "checksum": "abb0e2e4729257d6387122d20ba4b6d2"
     },
+    "diagnosticar_auth.R": {
+      "checksum": "426c61f235ddcb0df13b6a67b80e3a52"
+    },
     "examples/descriptores_tesistas.csv": {
       "checksum": "e66870229c8370db66454118b66ca009"
     },
     "examples/diccionario_codigos.xlsx": {
       "checksum": "7c97d9b81141ef05926bdfdbcbefff83"
+    },
+    "examples/diccionario_codigos_tesistas.csv": {
+      "checksum": "cff19a3ff1c32787e6bb85935889e1c3"
+    },
+    "examples/diccionario_codigos_tesistas.xlsx": {
+      "checksum": "a52f3494edc1e2404e72579f1129de9b"
     },
     "examples/Entrevista_01.txt": {
       "checksum": "97a666183f0815dc995a1be7439c1931"
@@ -5889,8 +5957,14 @@
     "examples/entrevista_05_andrea_comunicaciones.docx": {
       "checksum": "667274f28fc0acedd4d0a31f36f96c4d"
     },
+    "examples/generar_diccionario_codigos.R": {
+      "checksum": "ee642338ee36079c7180bb360c258a13"
+    },
     "examples/generar_entrevistas_tesistas.R": {
       "checksum": "9783fcbaccdeb8cb1f846148cb517235"
+    },
+    "examples/proyecto_demo_tutorial.rds": {
+      "checksum": "f08ccb7c0205a79b46fd3160f06e8e03"
     },
     "personal-2025-470111-36843658e199.json": {
       "checksum": "2ba7e707720f70ac5c24131d8fbf24fb"
@@ -5899,7 +5973,7 @@
       "checksum": "0e17a2fde51a964674ae6639e7383e78"
     },
     "R/admin.R": {
-      "checksum": "307b63181888be1af4cf2597e2e2d2f5"
+      "checksum": "1b10e93b9975ede727e790726cccf50f"
     },
     "R/analysis.R": {
       "checksum": "49733a792fb8df5b9c2bd97953397053"
@@ -5908,7 +5982,7 @@
       "checksum": "8b28a37203f65fe00fd3725f41ba233c"
     },
     "R/auth.R": {
-      "checksum": "0c98e1ee7b5a0d32ea0e03245a159fb7"
+      "checksum": "d38847ba86ff1ad8920ef10f8b9e049f"
     },
     "R/codebook.R": {
       "checksum": "669e3aed950c405509383cb5ddcbbfba"
@@ -5929,7 +6003,7 @@
       "checksum": "c564172bcfede6bef030b0758db3b765"
     },
     "R/plots.R": {
-      "checksum": "2cd2790ba953f05f7eba78fd3e5df0fa"
+      "checksum": "14590cc4b39884a731c1cc729c5216e2"
     },
     "R/query_tool.R": {
       "checksum": "112b7d24a7c4d50925ae5a87a5717c08"
@@ -5950,7 +6024,7 @@
       "checksum": "911f149df1f054d03780297e6885639d"
     },
     "R/topic_modeling.R": {
-      "checksum": "b94230e0220b26481678f584df4cc003"
+      "checksum": "a27fc02035da79ce73c01da6ee1280f9"
     },
     "R/utils.R": {
       "checksum": "2a813fa4d75f57ef65180c8e7227c860"
@@ -5982,8 +6056,323 @@
     "tests/testthat/test-utils.R": {
       "checksum": "12b59a5a6271f6e58410a042f1e1199d"
     },
+    "tutorial/build/app.log": {
+      "checksum": "bd89f1060c98bf2c372b305988131123"
+    },
+    "tutorial/build/page_1.png": {
+      "checksum": "e969f61140c2ce6f3e5779165fad946b"
+    },
+    "tutorial/build/page_2.png": {
+      "checksum": "6224685b01b55c08b0ae7d3159eec0b9"
+    },
+    "tutorial/build/page_26.png": {
+      "checksum": "10b721476124fe9e11f5b7c5dbd49932"
+    },
+    "tutorial/build/page_3.png": {
+      "checksum": "1622b99eea1b6ada4cb265e62405de1f"
+    },
+    "tutorial/build/page_41.png": {
+      "checksum": "a27a6db77ce31f7e467a7932977d4a45"
+    },
+    "tutorial/build/page_51.png": {
+      "checksum": "8478bd36c8be8dd7ac4f4d2dd12eaf01"
+    },
+    "tutorial/build/proyecto_demo.rds": {
+      "checksum": "f08ccb7c0205a79b46fd3160f06e8e03"
+    },
+    "tutorial/build_state.R": {
+      "checksum": "8ab7c5deaa2b251858973c2f24163d36"
+    },
+    "tutorial/capture.py": {
+      "checksum": "e4c37ae9a5bd16d4d9f3fe3433da0fc5"
+    },
+    "tutorial/capture_loaded.py": {
+      "checksum": "7afaa1c59bb5ff31e2f654b0805def8f"
+    },
+    "tutorial/capture_log.txt": {
+      "checksum": "99fe2a64833e805004255f664d6870e5"
+    },
+    "tutorial/capture_log2.txt": {
+      "checksum": "1a14e225472a7c6e9eaa57101cbcc300"
+    },
+    "tutorial/capture_log3.txt": {
+      "checksum": "c0d4ab2cabe4a5525c638c2c7bdf27a3"
+    },
+    "tutorial/capture_screenshots.py": {
+      "checksum": "7fab086736c44c9cbad22483434164ee"
+    },
+    "tutorial/capture_stateful.py": {
+      "checksum": "82d5bb16bbca0dce182826c2a836ba24"
+    },
+    "tutorial/diagnostico_scroll/antes_fix.json": {
+      "checksum": "4baaaf6d64f9e1d4de68753cbad8ee5c"
+    },
+    "tutorial/diagnostico_scroll/antes_fix.png": {
+      "checksum": "cd338ede056e2f89a69d483f51b89a1c"
+    },
+    "tutorial/diagnostico_scroll/despues_fix.png": {
+      "checksum": "60e5203c230e491a3489a771f7ae2d72"
+    },
+    "tutorial/diagnostico_scroll/despues_fix_next.png": {
+      "checksum": "e2a1ca66750ea7ff3ead2395b5e82143"
+    },
+    "tutorial/diagnostico_scroll/evidence_after.json": {
+      "checksum": "9531e419cf491c915b7c7c89449df0a9"
+    },
+    "tutorial/diagnostico_scroll/inspect_dom.py": {
+      "checksum": "6bb6ebb8ed5a2bd7632659a1b1209cb4"
+    },
+    "tutorial/diagnostico_scroll/reporte.txt": {
+      "checksum": "e5d750723b952e679793cfc35e249ff6"
+    },
+    "tutorial/diagnostico_scroll/reproduce_bug.py": {
+      "checksum": "14518230600a015a0c0c70d128af8869"
+    },
+    "tutorial/diagnostico_scroll/verify_fix.py": {
+      "checksum": "d4c9261e4ca97ce90ee82b07cba00918"
+    },
+    "tutorial/figures/00_login.png": {
+      "checksum": "a6aa9e4b371c8c01d43d15e83e81e09c"
+    },
+    "tutorial/figures/00_login_filled.png": {
+      "checksum": "f19a54d24c25a3473cb05adbfe6b2ee3"
+    },
+    "tutorial/figures/01_texto.png": {
+      "checksum": "279305c1ae6e0f324934f44ea2957546"
+    },
+    "tutorial/figures/02_descriptores.png": {
+      "checksum": "ff00abcaa810abb8757a176a969c8748"
+    },
+    "tutorial/figures/03_exploracion.png": {
+      "checksum": "a4ec8778b962fc1b0f9dcaf6436deb7f"
+    },
+    "tutorial/figures/04_codigos.png": {
+      "checksum": "a1033861e749df521d5d85de81a2960a"
+    },
+    "tutorial/figures/05_categorias.png": {
+      "checksum": "efc68448df763b01aea8c931c3822765"
+    },
+    "tutorial/figures/06_resaltes.png": {
+      "checksum": "1198120533cae8411480b3a86a63d891"
+    },
+    "tutorial/figures/07_memos.png": {
+      "checksum": "e2ba8f673581a5cff9909f16bf3c7116"
+    },
+    "tutorial/figures/08_quotations.png": {
+      "checksum": "4d4fa300a4de5822ff13ceb7592f31f0"
+    },
+    "tutorial/figures/09_codebook.png": {
+      "checksum": "02dc63a2a498fafde18ebcd23c3e7c6e"
+    },
+    "tutorial/figures/10_grupos.png": {
+      "checksum": "796ba8693531418008d6dc0f924567ef"
+    },
+    "tutorial/figures/11_research_q.png": {
+      "checksum": "405c8e735f82382353ff787ae80cc523"
+    },
+    "tutorial/figures/12_analisis.png": {
+      "checksum": "09da40be71f103ff90d8ea18137847a9"
+    },
+    "tutorial/figures/13_matricial.png": {
+      "checksum": "e8c0701808a427d32db011c171b9d655"
+    },
+    "tutorial/figures/14_analisis_ia.png": {
+      "checksum": "5fec0a84f2bb4952cc76ff5692e08c6d"
+    },
+    "tutorial/figures/15_analisis_semantico.png": {
+      "checksum": "91ecf6cc5b581eac6feb3806cf43d134"
+    },
+    "tutorial/figures/16_topic_modeling.png": {
+      "checksum": "587ddfba5a64ae310c15fc49836b7a73"
+    },
+    "tutorial/figures/17_sentiment.png": {
+      "checksum": "1d049dd2fe3e708faaaaeef447e31fd5"
+    },
+    "tutorial/figures/18_ner.png": {
+      "checksum": "11931be4fe4856ef62769ec0f49e31b6"
+    },
+    "tutorial/figures/19_reliability.png": {
+      "checksum": "2878ef118a9de3eb1a01bdc54f4f8ec3"
+    },
+    "tutorial/figures/20_audit.png": {
+      "checksum": "91bc8ef13fec49e6b4553fc2fbe5c222"
+    },
+    "tutorial/figures/21_reporte_ia.png": {
+      "checksum": "cc0ff69fe653629c29cca045fa1cc342"
+    },
+    "tutorial/figures/22_estado.png": {
+      "checksum": "c15fe820f03c3fb5acb564006d90bb91"
+    },
+    "tutorial/figures/23_citar.png": {
+      "checksum": "409c098d6eff9acaf7c1559a8331dfa8"
+    },
+    "tutorial/figures/24_info.png": {
+      "checksum": "6af21f8c3ec6098f11ef4f7692534ff6"
+    },
+    "tutorial/figures/25_multimedia.png": {
+      "checksum": "1c7d63cc8cd223e1783c7e500d41eb4e"
+    },
+    "tutorial/figures/26_collab.png": {
+      "checksum": "614eb2e278a8f808352c3745b0590c40"
+    },
+    "tutorial/figures/27_query.png": {
+      "checksum": "565d55656729a65c3f5f7a29396eb81b"
+    },
+    "tutorial/figures/28_viz_extra.png": {
+      "checksum": "c73174d9a41de9416903705aa17132a6"
+    },
+    "tutorial/figures/29_hyperlinks.png": {
+      "checksum": "94026375ba7e4d1273db566527fcbb48"
+    },
+    "tutorial/figures/30_versioning.png": {
+      "checksum": "c0c7ad0b1d4c750e6d4d15719cef6ac7"
+    },
+    "tutorial/figures/31_performance.png": {
+      "checksum": "92c2a89ce19035ef947f0f3b5b7f1a36"
+    },
+    "tutorial/figures/32_mixed_stats.png": {
+      "checksum": "bf5fd85803ff55570f6d125884391c9a"
+    },
+    "tutorial/figures/33_templates.png": {
+      "checksum": "4f38361c4798fd9ba92cb29aa7504027"
+    },
+    "tutorial/figures/34_ux.png": {
+      "checksum": "7ab779d6d2c49e87464a02e9f99d36f7"
+    },
+    "tutorial/figures/35_admin.png": {
+      "checksum": "422614f301c0b49a92687584b66ab673"
+    },
+    "tutorial/figures/L00_estado_loaded.png": {
+      "checksum": "645f7bf126b1bc314152c8c70a6ff1bd"
+    },
+    "tutorial/figures/L01_texto.png": {
+      "checksum": "aa631e709f99739c496cc88edd80c4ac"
+    },
+    "tutorial/figures/L02_descriptores.png": {
+      "checksum": "629bd923a2f2bdd981fc847049a20a6c"
+    },
+    "tutorial/figures/L03_exploracion.png": {
+      "checksum": "a4ec8778b962fc1b0f9dcaf6436deb7f"
+    },
+    "tutorial/figures/L04_codigos.png": {
+      "checksum": "165d7e1ef040db9fde00afc93956d913"
+    },
+    "tutorial/figures/L05_categorias.png": {
+      "checksum": "eea5e08f8eca27fefbccae01635eea6e"
+    },
+    "tutorial/figures/L06_resaltes.png": {
+      "checksum": "16ae339ac92ff994cd88b0cebefefca4"
+    },
+    "tutorial/figures/L07_memos.png": {
+      "checksum": "24c091ff6b408335e35425d4e9173cb2"
+    },
+    "tutorial/figures/L08_quotations.png": {
+      "checksum": "ae4ca436c007f190f9e95640f5979b4e"
+    },
+    "tutorial/figures/L09_codebook.png": {
+      "checksum": "32a70f81e643d999206d2523c2105ab5"
+    },
+    "tutorial/figures/L10_grupos.png": {
+      "checksum": "744fa3868b3547de9d4bdcc2a3d2b11b"
+    },
+    "tutorial/figures/L11_research_q.png": {
+      "checksum": "fa758ee5a3b9bee5d7f0fd3bcf0d9ad4"
+    },
+    "tutorial/figures/L12_analisis.png": {
+      "checksum": "11fc7b7b91e032708a8ee9f2d758ec1f"
+    },
+    "tutorial/figures/L13_matricial.png": {
+      "checksum": "e8c0701808a427d32db011c171b9d655"
+    },
+    "tutorial/figures/L14_audit.png": {
+      "checksum": "c3fe520b8a46e8dfbd13d90a0e292aa9"
+    },
+    "tutorial/figures/L15_query.png": {
+      "checksum": "2240e45bc521be4eec7fb6ac08ee9136"
+    },
+    "tutorial/figures/L16_viz_extra.png": {
+      "checksum": "c73174d9a41de9416903705aa17132a6"
+    },
+    "tutorial/figures/L17_hyperlinks.png": {
+      "checksum": "5a9259c857c150611a45d5fbc7e38c4f"
+    },
+    "tutorial/figures/L18_versioning.png": {
+      "checksum": "197657ee6a699ef27c7e02db613206ce"
+    },
+    "tutorial/figures/L19_performance.png": {
+      "checksum": "92c2a89ce19035ef947f0f3b5b7f1a36"
+    },
+    "tutorial/figures/L20_mixed_stats.png": {
+      "checksum": "9b024ab8aa8e363342ad212d474abda3"
+    },
+    "tutorial/figures/L21_templates.png": {
+      "checksum": "4f38361c4798fd9ba92cb29aa7504027"
+    },
+    "tutorial/figures/L22_ux.png": {
+      "checksum": "7ab779d6d2c49e87464a02e9f99d36f7"
+    },
+    "tutorial/figures/L23_multimedia.png": {
+      "checksum": "1c7d63cc8cd223e1783c7e500d41eb4e"
+    },
+    "tutorial/figures/L24_collab.png": {
+      "checksum": "da8ffd0761265bc333e7bf95c2ac7d95"
+    },
+    "tutorial/figures/L25_reliability.png": {
+      "checksum": "2878ef118a9de3eb1a01bdc54f4f8ec3"
+    },
+    "tutorial/figures/L26_topic_modeling.png": {
+      "checksum": "587ddfba5a64ae310c15fc49836b7a73"
+    },
+    "tutorial/figures/L27_sentiment.png": {
+      "checksum": "1d049dd2fe3e708faaaaeef447e31fd5"
+    },
+    "tutorial/figures/L28_ner.png": {
+      "checksum": "11931be4fe4856ef62769ec0f49e31b6"
+    },
+    "tutorial/figures/L29_analisis_ia.png": {
+      "checksum": "5fec0a84f2bb4952cc76ff5692e08c6d"
+    },
+    "tutorial/figures/L30_analisis_semantico.png": {
+      "checksum": "91ecf6cc5b581eac6feb3806cf43d134"
+    },
+    "tutorial/figures/L31_reporte_ia.png": {
+      "checksum": "cc0ff69fe653629c29cca045fa1cc342"
+    },
+    "tutorial/figures/L32_citar.png": {
+      "checksum": "409c098d6eff9acaf7c1559a8331dfa8"
+    },
+    "tutorial/figures/L33_info.png": {
+      "checksum": "6af21f8c3ec6098f11ef4f7692534ff6"
+    },
+    "tutorial/probe_sidebar.py": {
+      "checksum": "a7ac734fe5d0beb845014e483e80d4f8"
+    },
+    "tutorial/RCualiText_Tutorial.aux": {
+      "checksum": "92cb9b0fb8333f80b2a756382550f21d"
+    },
+    "tutorial/RCualiText_Tutorial.log": {
+      "checksum": "b656a1e9a2b02b945403d903ac11032f"
+    },
+    "tutorial/RCualiText_Tutorial.out": {
+      "checksum": "6cf529f842f8fe1bcda1f77ee48b1448"
+    },
+    "tutorial/RCualiText_Tutorial.pdf": {
+      "checksum": "274fe22a63bdfc3a03269e224558535a"
+    },
+    "tutorial/RCualiText_Tutorial.tex": {
+      "checksum": "ebffc96e92baab6b18f64efc831ab39b"
+    },
+    "tutorial/RCualiText_Tutorial.toc": {
+      "checksum": "15d1a31bc97eac5584ec809c2baf97f6"
+    },
+    "tutorial/regen_L01_texto.py": {
+      "checksum": "2a1dd3270475d0024caf1e0c882cd0c0"
+    },
+    "tutorial/run_app.R": {
+      "checksum": "91771a759190c88500bc9c2168ea9186"
+    },
     "www/styles.css": {
-      "checksum": "42309ebef6de075d410e221180d70cb5"
+      "checksum": "8d721c2e8c64271c96861f26ab64a43f"
     }
   },
   "users": null

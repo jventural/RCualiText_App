@@ -1,5 +1,10 @@
 # R/topic_modeling.R
 # LDA topic modeling for qualitative corpora
+# Dependencia transitiva forzada: reshape2 (usado por tidytext::cast_dtm / melt)
+# para que rsconnect::writeManifest la incluya en el deploy.
+if (!requireNamespace("reshape2", quietly = TRUE)) {
+  stop("Package 'reshape2' required for topic modeling")
+}
 
 #' @title Generate LDA topic model
 #' @description Performs Latent Dirichlet Allocation topic modeling on a corpus of documents.
