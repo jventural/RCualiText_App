@@ -14,28 +14,26 @@ plot_codigos <- function(df, fill = TRUE, code_colors = NULL,
   sin_cat_label <- if (!is.null(labels$sin_cat)) labels$sin_cat else "Uncategorized"
   df_counts <- prepare_code_counts(df, fill, sin_cat_label)
 
-  # Agregar frecuencias totales por codigo (sin granularidad por archivo).
-  # Sin esto, un codigo presente en N documentos genera N barras separadas en el plotly.
-  if (fill && "Categoria" %in% names(df_counts)) {
-    df_counts <- df_counts %>%
-      dplyr::group_by(Codigo, Categoria) %>%
-      dplyr::summarise(Frecuencia = sum(Frecuencia), .groups = "drop") %>%
-      dplyr::mutate(Codigo = factor(as.character(Codigo),
-                                    levels = unique(as.character(Codigo)[order(Frecuencia)])))
-  } else {
-    df_counts <- df_counts %>%
-      dplyr::group_by(Codigo) %>%
-      dplyr::summarise(Frecuencia = sum(Frecuencia), .groups = "drop") %>%
-      dplyr::mutate(Codigo = factor(as.character(Codigo),
-                                    levels = unique(as.character(Codigo)[order(Frecuencia)])))
-  }
+  # Fix factor levels globales: ordenar el eje Y por frecuencia TOTAL del codigo
+  # (de menor a mayor al graficar). Sin esto, prepare_code_counts usa factor
+  # levels locales a cada Archivo y plotly duplica codigos en el eje Y.
+  totales <- df_counts %>%
+    dplyr::group_by(Codigo) %>%
+    dplyr::summarise(total = sum(Frecuencia), .groups = "drop") %>%
+    dplyr::arrange(total)
+  df_counts <- df_counts %>%
+    dplyr::mutate(Codigo = factor(as.character(Codigo),
+                                  levels = as.character(totales$Codigo)))
 
-  if (fill && "Categoria" %in% names(df_counts)) {
+  if (fill && "Archivo" %in% names(df_counts)) {
+    # Stack por Archivo: cada documento (entrevista/persona) es un segmento
+    # de color distinto dentro de la barra total del codigo.
     p <- plotly::plot_ly(
-      data = df_counts, y = ~Codigo, x = ~Frecuencia, color = ~Categoria,
-      type = "bar", orientation = "h", text = ~Frecuencia, textposition = "outside",
-      textfont = list(size = 12, color = "#2c3e50", family = "Arial Black"),
-      hovertemplate = paste0("<b>%{y}</b><br>", labels$freq, ": %{x}<extra></extra>")
+      data = df_counts, y = ~Codigo, x = ~Frecuencia, color = ~Archivo,
+      type = "bar", orientation = "h",
+      hovertemplate = paste0("<b>%{y}</b><br>",
+                             labels$freq, ": %{x}<br>",
+                             "Doc: %{fullData.name}<extra></extra>")
     )
   } else {
     if (!is.null(code_colors)) {
