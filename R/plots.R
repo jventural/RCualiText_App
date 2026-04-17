@@ -2,6 +2,27 @@
 # Visualization functions for RCualiText App
 # Includes: code distribution, network, embedding plots
 
+# Paleta fija para categorias (colores accesibles y distinguibles)
+CAT_PALETTE <- c(
+  "#3498db", "#e67e22", "#27ae60", "#9b59b6", "#c0392b",
+  "#16a085", "#f39c12", "#34495e", "#1abc9c", "#e74c3c",
+  "#8e44ad", "#2ecc71", "#d35400", "#2980b9", "#7f8c8d"
+)
+
+# Colores estables por nombre: misma categoria -> mismo color siempre,
+# sin importar que otras categorias esten presentes (no cambia con filtros).
+stable_cat_colors <- function(categories, palette = CAT_PALETTE) {
+  cats <- unique(as.character(categories))
+  cats <- cats[!is.na(cats) & nchar(cats) > 0]
+  if (length(cats) == 0) return(character(0))
+  # Hash deterministico del nombre -> indice en la paleta
+  idx <- vapply(cats, function(c) {
+    h <- sum(utf8ToInt(c))
+    (h %% length(palette)) + 1L
+  }, integer(1))
+  stats::setNames(palette[idx], cats)
+}
+
 #' @title Interactive code frequency bar chart (plotly)
 #' @description Builds a horizontal stacked bar chart of code frequencies per file using plotly, optionally colored by category or by a user-provided code-color mapping.
 #' @param df Data frame of fragments with columns `Archivo`, `Codigo`, and `Categoria`.
@@ -32,12 +53,14 @@ plot_codigos <- function(df, fill = TRUE, code_colors = NULL,
 
   # Construir ggplot con facet_wrap por Archivo, luego convertir a plotly
   if (fill && "Categoria" %in% names(df_counts)) {
+    cat_colors <- stable_cat_colors(df_counts$Categoria)
     g <- ggplot2::ggplot(df_counts,
                          ggplot2::aes(x = Codigo, y = Frecuencia, fill = Categoria,
                                       text = paste0("<b>", Codigo, "</b><br>",
                                                     labels$freq, ": ", Frecuencia,
                                                     "<br>", labels$cat, ": ", Categoria))) +
-      ggplot2::geom_col()
+      ggplot2::geom_col() +
+      ggplot2::scale_fill_manual(values = cat_colors, drop = FALSE)
   } else {
     g <- ggplot2::ggplot(df_counts,
                          ggplot2::aes(x = Codigo, y = Frecuencia, fill = Codigo,
@@ -86,12 +109,14 @@ plot_codigos_ggplot <- function(df, fill = TRUE, code_colors = NULL,
   df_counts <- prepare_code_counts(df, fill, sin_cat_label)
 
   if (fill && "Categoria" %in% names(df_counts)) {
+    cat_colors <- stable_cat_colors(df_counts$Categoria)
     p <- ggplot2::ggplot(df_counts, ggplot2::aes(x = Codigo, y = Frecuencia, fill = Categoria)) +
       ggplot2::geom_col() +
       ggplot2::geom_text(ggplot2::aes(label = Frecuencia), hjust = -0.3, size = 4, fontface = "bold", color = "#2c3e50") +
       ggplot2::facet_wrap(~ Archivo, scales = "free_y") +
       ggplot2::coord_flip() +
-      ggplot2::labs(x = labels$codes, y = labels$freq, fill = labels$cat)
+      ggplot2::labs(x = labels$codes, y = labels$freq, fill = labels$cat) +
+      ggplot2::scale_fill_manual(values = cat_colors)
   } else {
     p <- ggplot2::ggplot(df_counts, ggplot2::aes(x = Codigo, y = Frecuencia, fill = Codigo)) +
       ggplot2::geom_col() +
