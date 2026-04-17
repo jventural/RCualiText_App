@@ -714,6 +714,34 @@
         "Archs": "x64"
       }
     },
+    "bcrypt": {
+      "Source": "CRAN",
+      "Repository": "https://cloud.r-project.org",
+      "description": {
+        "Package": "bcrypt",
+        "Type": "Package",
+        "Title": "'Blowfish' Key Derivation and Password Hashing",
+        "Version": "1.2.1",
+        "Authors@R": "c(\n    person(\"Jeroen\", \"Ooms\", role = c(\"aut\", \"cre\"), email = \"jeroenooms@gmail.com\",\n      comment = c(ORCID = \"0000-0002-4035-0289\")),\n    person(\"Damien\", \"Miller\", role = \"cph\", comment = 'blowfish algorithm'),\n    person(\"Niels\", \"Provos\", role = \"cph\", comment = 'py_bcrypt code'))",
+        "Description": "Bindings to the 'blowfish' password hashing algorithm\n    <https://www.openbsd.org/papers/bcrypt-paper.pdf> derived from\n    the 'OpenBSD' implementation.",
+        "URL": "https://jeroen.r-universe.dev/bcrypt",
+        "BugReports": "https://github.com/jeroen/bcrypt/issues",
+        "License": "BSD_2_clause + file LICENSE",
+        "Imports": "openssl (>= 2.3.5)",
+        "RoxygenNote": "6.1.1",
+        "Suggests": "spelling",
+        "Language": "en-US",
+        "Encoding": "UTF-8",
+        "NeedsCompilation": "yes",
+        "Packaged": "2026-02-27 20:13:25 UTC; jeroen",
+        "Author": "Jeroen Ooms [aut, cre] (ORCID: <https://orcid.org/0000-0002-4035-0289>),\n  Damien Miller [cph] (blowfish algorithm),\n  Niels Provos [cph] (py_bcrypt code)",
+        "Maintainer": "Jeroen Ooms <jeroenooms@gmail.com>",
+        "Repository": "CRAN",
+        "Date/Publication": "2026-02-28 06:10:28 UTC",
+        "Built": "R 4.4.3; x86_64-w64-mingw32; 2026-04-15 03:07:05 UTC; windows",
+        "Archs": "x64"
+      }
+    },
     "bit": {
       "Source": "CRAN",
       "Repository": "https://cloud.r-project.org",
@@ -5823,7 +5851,7 @@
       "checksum": "d293c0added8f722ef0bab15b917d9b1"
     },
     "app.R": {
-      "checksum": "0bd32c7f2e810767b982ad051903f4db"
+      "checksum": "bd00cb3820d6d4faa28f28e344516e76"
     },
     "app.R.bak_20260410_115613": {
       "checksum": "1b85739c9e545bbf1e1e22d8395a0721"
@@ -5831,17 +5859,38 @@
     "app.R.bak_pre_mejoras_20260416_163214": {
       "checksum": "abb0e2e4729257d6387122d20ba4b6d2"
     },
+    "examples/descriptores_tesistas.csv": {
+      "checksum": "e66870229c8370db66454118b66ca009"
+    },
     "examples/diccionario_codigos.xlsx": {
       "checksum": "7c97d9b81141ef05926bdfdbcbefff83"
     },
     "examples/Entrevista_01.txt": {
       "checksum": "97a666183f0815dc995a1be7439c1931"
     },
+    "examples/entrevista_01_carla_psicologia.docx": {
+      "checksum": "33a7f0828c3f51e7bbd04ad76ed25643"
+    },
     "examples/Entrevista_02.txt": {
       "checksum": "263c0e3d5a2f76bd528d9de07cc0f61f"
     },
+    "examples/entrevista_02_diego_ingenieria.docx": {
+      "checksum": "377d727d56f75abad59f979098c9c646"
+    },
     "examples/Entrevista_03.txt": {
       "checksum": "060beffa979a4c08e009fd8547faa815"
+    },
+    "examples/entrevista_03_valeria_educacion.docx": {
+      "checksum": "9f723bf7479ac96dbe6470810f5eb2db"
+    },
+    "examples/entrevista_04_miguel_salud_publica.docx": {
+      "checksum": "4da35f0fec4b75448accae28aac563f1"
+    },
+    "examples/entrevista_05_andrea_comunicaciones.docx": {
+      "checksum": "667274f28fc0acedd4d0a31f36f96c4d"
+    },
+    "examples/generar_entrevistas_tesistas.R": {
+      "checksum": "9783fcbaccdeb8cb1f846148cb517235"
     },
     "personal-2025-470111-36843658e199.json": {
       "checksum": "2ba7e707720f70ac5c24131d8fbf24fb"
@@ -5849,26 +5898,32 @@
     "PROYECTO_RESUMEN.txt": {
       "checksum": "0e17a2fde51a964674ae6639e7383e78"
     },
+    "R/admin.R": {
+      "checksum": "307b63181888be1af4cf2597e2e2d2f5"
+    },
     "R/analysis.R": {
       "checksum": "49733a792fb8df5b9c2bd97953397053"
     },
     "R/api.R": {
       "checksum": "8b28a37203f65fe00fd3725f41ba233c"
     },
+    "R/auth.R": {
+      "checksum": "0c98e1ee7b5a0d32ea0e03245a159fb7"
+    },
     "R/codebook.R": {
       "checksum": "669e3aed950c405509383cb5ddcbbfba"
     },
     "R/collaboration.R": {
-      "checksum": "d4cd496da59af254269ce345dccb5df9"
+      "checksum": "e8d2142a28186e66d6ce0eb054fc161f"
     },
     "R/hyperlinks.R": {
-      "checksum": "c3926dc39122a299ac0570a788557e58"
+      "checksum": "b5ee5f7b4276584cd6445c04be3cc0e6"
     },
     "R/mixed_stats.R": {
       "checksum": "deaebb65d3fe158c7dc4fc327021141a"
     },
     "R/multimedia.R": {
-      "checksum": "41289c985eb4ff6f14613480754adad3"
+      "checksum": "28ce19aa1db06cb19e0eb90cf480f3ef"
     },
     "R/performance.R": {
       "checksum": "c564172bcfede6bef030b0758db3b765"
@@ -5886,7 +5941,7 @@
       "checksum": "6178aec2a6a0d8656771165c703720c7"
     },
     "R/templates.R": {
-      "checksum": "b1f1d31a67cbf37bf3503c0de2363d57"
+      "checksum": "cd28b8fb34f8ed7f25f0c21c0fd23da5"
     },
     "R/text_analysis.R": {
       "checksum": "62865a5bf2e1aff499a9a0e287ee3a88"
@@ -5901,10 +5956,10 @@
       "checksum": "2a813fa4d75f57ef65180c8e7227c860"
     },
     "R/ux_enhance.R": {
-      "checksum": "32e08bfcd6bea76f818f6dc709ae8754"
+      "checksum": "dceb6571f40ce07e98d33d0bac0dcd0c"
     },
     "R/versioning.R": {
-      "checksum": "da101e1269390e4aed91e2d0721745de"
+      "checksum": "d4832f48b5a3fc6c56399f948d65f973"
     },
     "R/viz_extra.R": {
       "checksum": "3e9536b6d5ac424a115459b7613360f5"

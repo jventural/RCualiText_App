@@ -39,7 +39,7 @@ library(rhandsontable)
 # Si no están instaladas, la app sigue funcionando; solo las features que dependen de ellas mostrarán error al usarlas
 optional_libs <- c("xml2", "topicmodels", "textstem",
                    "visNetwork", "base64enc", "markdown",
-                   "DBI", "RSQLite", "text2vec", "QCA")
+                   "DBI", "RSQLite", "text2vec", "QCA", "bcrypt")
 # NOTA: 'tesseract' se carga lazy en R/multimedia.R (requiere libtesseract-dev
 # del sistema que Posit Connect Cloud no provee; solo funciona en instalacion local)
 for (lib in optional_libs) {
@@ -78,6 +78,8 @@ source("R/performance.R")
 source("R/mixed_stats.R")
 source("R/templates.R")
 source("R/ux_enhance.R")
+source("R/auth.R")
+source("R/admin.R")
 
 # ========================================
 # Configuración de registro de usuarios (Google Sheets)
@@ -85,6 +87,9 @@ source("R/ux_enhance.R")
 # Sheet ID es público (no es secreto, solo el service account puede escribir)
 google_sheets_id <- Sys.getenv("GOOGLE_SHEETS_ID",
                                "16Zz3wYL-OZ7r2y5sfxz-rgA1mF3MT37yavZgnLaZM7Y")
+# Exponer como opcion para que R/auth.R pueda accederlo incluso bajo
+# shiny::runApp (que aisla el scope del script)
+options(rcualitext.sheet_id = google_sheets_id)
 
 # Resolver credenciales: (1) variable de entorno con JSON completo,
 # (2) variable de entorno con ruta a archivo, (3) archivo local para desarrollo
@@ -118,6 +123,14 @@ tryCatch({
   message("Error autenticando Google Sheets: ", e[["message"]])
   googlesheets4::gs4_deauth()
 })
+
+# ========================================
+# Auth: seed del admin desde env vars (ADMIN_USER / ADMIN_PASS)
+# ========================================
+# Se ejecuta solo si hay auth a Google Sheets. Idempotente.
+tryCatch({
+  if (exists("auth_seed_admin")) auth_seed_admin()
+}, error = function(e) message("auth seed error: ", e[["message"]]))
 
 # Función para guardar registro de usuario en Google Sheets
 guardar_registro <- function(nombre, correo) {
@@ -1632,6 +1645,9 @@ ui <- dashboardPage(
     titleWidth = 280,
     tags$li(class = "dropdown",
       uiOutput("indicador_cambios", container = function(...) div(style = "padding: 10px 15px;", ...))
+    ),
+    tags$li(class = "dropdown",
+      uiOutput("header_user_info", container = function(...) div(style = "padding: 10px 15px;", ...))
     ),
     tags$li(class = "dropdown",
       div(style = "padding: 10px 15px; display: flex; align-items: center; gap: 8px;",
@@ -3177,7 +3193,9 @@ ui <- dashboardPage(
       perf_tab_ui(),
       mixed_stats_tab_ui(),
       templates_tab_ui(),
-      ux_enhance_tab_ui()
+      ux_enhance_tab_ui(),
+      # === Admin (visible solo para rol=admin via sidebar) ===
+      admin_tab_ui()
     )
   )
 )
@@ -3304,12 +3322,24 @@ server <- function(input, output, session) {
           ),
 
           div(class = "login-field",
-            textInput("reg_nombre", tr("login.nombre"), placeholder = tr("login.nombre")),
-            textInput("reg_correo", tr("login.correo"), placeholder = "example@university.edu")
+            textInput("login_usuario",
+                      if (current_lang() == "es") "Usuario" else "Username",
+                      placeholder = if (current_lang() == "es") "Tu usuario" else "Your username"),
+            passwordInput("login_pwd",
+                          if (current_lang() == "es") "Contrase\u00f1a" else "Password",
+                          placeholder = "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022")
           ),
 
-          actionButton("btn_registro", tr("login.boton"), class = "btn-registro",
-                       icon = icon("sign-in-alt"))
+          actionButton("btn_registro",
+                       if (current_lang() == "es") "Entrar" else "Sign in",
+                       class = "btn-registro",
+                       icon = icon("sign-in-alt")),
+
+          tags$p(style = "margin-top: 18px; text-align: center; font-size: 12px; color: #7f8c8d;",
+                 if (current_lang() == "es")
+                   "Si no tienes cuenta, solic\u00edtala al administrador."
+                 else
+                   "If you don't have an account, request it from the administrator.")
         ),
 
         # Footer
@@ -3329,28 +3359,88 @@ server <- function(input, output, session) {
   outputOptions(output, "show_registro_error", suspendWhenHidden = FALSE)
   output$registro_error_text <- renderText({ error_registro() })
 
-  # Registration button handler
+  # ---- Login: autenticacion con usuario + contrasena contra hoja Usuarios ----
+  login_attempts <- reactiveVal(0)
+  login_blocked_until <- reactiveVal(as.POSIXct(NA))
+
   observeEvent(input$btn_registro, {
-    nombre <- trimws(input$reg_nombre %||% "")
-    correo <- trimws(input$reg_correo %||% "")
-
-    # Validations
-    if (nchar(nombre) == 0) {
-      error_registro(tr("login.error_nombre"))
-      return()
-    }
-    if (!grepl("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$", correo)) {
-      error_registro(tr("login.error_correo"))
+    # Rate limit: 5 intentos, bloqueo de 60s
+    now <- Sys.time()
+    if (!is.na(login_blocked_until()) && now < login_blocked_until()) {
+      segs <- round(as.numeric(difftime(login_blocked_until(), now, units = "secs")))
+      error_registro(if (current_lang() == "es")
+        paste0("Demasiados intentos. Espera ", segs, " segundos.")
+        else paste0("Too many attempts. Wait ", segs, " seconds."))
       return()
     }
 
-    # Save registration
-    guardar_registro(nombre, correo)
+    usuario <- trimws(input$login_usuario %||% "")
+    pwd <- input$login_pwd %||% ""
 
-    # Clear error and hide login overlay
-    error_registro("")
-    shinyjs::hide("login_overlay")
+    if (nchar(usuario) == 0 || nchar(pwd) == 0) {
+      error_registro(if (current_lang() == "es")
+        "Ingresa usuario y contrase\u00f1a" else "Enter username and password")
+      return()
+    }
+
+    res <- tryCatch(auth_login(usuario, pwd),
+                    error = function(e) list(ok = FALSE,
+                                             reason = paste("error:", conditionMessage(e))))
+
+    if (isTRUE(res$ok)) {
+      rv$current_user <- res$user
+      error_registro("")
+      login_attempts(0)
+      shinyjs::hide("login_overlay")
+      showNotification(
+        if (current_lang() == "es")
+          paste0("Bienvenido, ", res$user$nombre_completo %||% res$user$usuario)
+        else
+          paste0("Welcome, ", res$user$nombre_completo %||% res$user$usuario),
+        type = "message", duration = 4)
+    } else {
+      login_attempts(login_attempts() + 1)
+      if (login_attempts() >= 5) {
+        login_blocked_until(Sys.time() + 60)
+        login_attempts(0)
+      }
+      msg <- switch(res$reason,
+                    "credenciales" = if (current_lang() == "es")
+                      "Usuario o contrase\u00f1a incorrectos"
+                      else "Invalid username or password",
+                    "inactivo" = if (current_lang() == "es")
+                      "Cuenta desactivada. Contacta al administrador."
+                      else "Account disabled. Contact the administrator.",
+                    paste("Error:", res$reason))
+      error_registro(msg)
+    }
   })
+
+  # ---- Logout (boton que inyectaremos en el header) ----
+  observeEvent(input$btn_logout, {
+    rv$current_user <- NULL
+    session$reload()
+  })
+
+  # ---- Header: info de usuario + logout ----
+  output$header_user_info <- renderUI({
+    cu <- rv$current_user
+    if (is.null(cu)) return(NULL)
+    badge_class <- if (isTRUE(cu$rol == "admin")) "label-danger" else "label-primary"
+    tagList(
+      tags$span(icon("user-circle"),
+                " ", cu$usuario,
+                tags$span(class = paste("label", badge_class),
+                          style = "margin-left: 6px;",
+                          cu$rol),
+                style = "color: #fff; margin-right: 10px;"),
+      actionLink("btn_logout",
+                 tagList(icon("sign-out-alt"),
+                         if (current_lang() == "es") " Salir" else " Logout"),
+                 style = "color: #fff; text-decoration: underline; cursor: pointer;")
+    )
+  })
+  outputOptions(output, "header_user_info", suspendWhenHidden = FALSE)
 
   dt_language <- function() {
     list(
@@ -3411,7 +3501,11 @@ server <- function(input, output, session) {
         menuSubItem("Mixed statistics", tabName = "mixed_stats", icon = icon("chart-pie")),
         menuSubItem("Templates", tabName = "templates", icon = icon("clipboard-list")),
         menuSubItem("UX / Shortcuts", tabName = "ux_enhance", icon = icon("keyboard"))
-      )
+      ),
+      # --- Admin: solo visible si el usuario tiene rol=admin ---
+      if (!is.null(rv$current_user) && isTRUE(rv$current_user$rol == "admin"))
+        menuItem("Administracion", tabName = "admin",
+                 icon = icon("user-shield"), startExpanded = FALSE)
     )
   })
 
@@ -3470,7 +3564,8 @@ server <- function(input, output, session) {
     coder2_tabla = NULL,
     regex_results = NULL,
     last_autosave = NULL,
-    ai_code_suggestions = NULL
+    ai_code_suggestions = NULL,
+    current_user = NULL   # { usuario, rol, nombre_completo, correo, ... }
   )
 
   # Audit log helper
@@ -8050,6 +8145,7 @@ server <- function(input, output, session) {
   setup_mixed_stats_server(input, output, session, rv)
   setup_templates_server(input, output, session, rv)
   setup_ux_enhance_server(input, output, session, rv)
+  setup_admin_server(input, output, session, rv)
 }
 
 # ========================================
