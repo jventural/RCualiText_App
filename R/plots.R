@@ -14,6 +14,22 @@ plot_codigos <- function(df, fill = TRUE, code_colors = NULL,
   sin_cat_label <- if (!is.null(labels$sin_cat)) labels$sin_cat else "Uncategorized"
   df_counts <- prepare_code_counts(df, fill, sin_cat_label)
 
+  # Agregar frecuencias totales por codigo (sin granularidad por archivo).
+  # Sin esto, un codigo presente en N documentos genera N barras separadas en el plotly.
+  if (fill && "Categoria" %in% names(df_counts)) {
+    df_counts <- df_counts %>%
+      dplyr::group_by(Codigo, Categoria) %>%
+      dplyr::summarise(Frecuencia = sum(Frecuencia), .groups = "drop") %>%
+      dplyr::mutate(Codigo = factor(as.character(Codigo),
+                                    levels = unique(as.character(Codigo)[order(Frecuencia)])))
+  } else {
+    df_counts <- df_counts %>%
+      dplyr::group_by(Codigo) %>%
+      dplyr::summarise(Frecuencia = sum(Frecuencia), .groups = "drop") %>%
+      dplyr::mutate(Codigo = factor(as.character(Codigo),
+                                    levels = unique(as.character(Codigo)[order(Frecuencia)])))
+  }
+
   if (fill && "Categoria" %in% names(df_counts)) {
     p <- plotly::plot_ly(
       data = df_counts, y = ~Codigo, x = ~Frecuencia, color = ~Categoria,
