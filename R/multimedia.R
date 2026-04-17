@@ -154,16 +154,29 @@ setup_multimedia_server <- function(input, output, session, rv) {
   })
 
   observeEvent(input$mm_save_as_doc, {
-    req(mm_rv$transcript)
-    name <- input$mm_doc_name
+    if (is.null(mm_rv$transcript) || nrow(mm_rv$transcript) == 0) {
+      showNotification("No hay transcripcion que agregar. Transcribe primero el audio o imagen.",
+                       type = "warning", duration = 5)
+      return()
+    }
+    name <- trimws(input$mm_doc_name %||% "")
     if (nchar(name) < 1) name <- paste0("transcript_",
                                         format(Sys.time(), "%Y%m%d_%H%M%S"))
-    # Compose text with timestamps
-    full_text <- paste0("[", mm_format_hms(mm_rv$transcript$start), "] ",
-                        mm_rv$transcript$text, collapse = "\n\n")
-    nuevo <- list(name = name, text = full_text)
+    # Componer texto con timestamps (si existen)
+    full_text <- tryCatch({
+      paste(paste0("[", mm_format_hms(mm_rv$transcript$start), "] ",
+                   mm_rv$transcript$text),
+            collapse = "\n\n")
+    }, error = function(e) paste(mm_rv$transcript$text, collapse = "\n\n"))
+
+    # IMPORTANTE: usar la misma estructura que el resto de la app
+    # (campos name / original / modified) para que el visor de texto
+    # y el resto de modulos lean correctamente.
+    nuevo <- list(name = name, original = full_text, modified = full_text)
     if (is.null(rv$docs)) rv$docs <- list()
     rv$docs[[length(rv$docs) + 1]] <- nuevo
+    # Si es el primer documento, posicionar el indice
+    if (rv$idx == 0) rv$idx <- 1
     showNotification(paste("Added to corpus:", name), type = "message")
   })
 }
