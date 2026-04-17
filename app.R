@@ -3335,11 +3335,42 @@ server <- function(input, output, session) {
                        class = "btn-registro",
                        icon = icon("sign-in-alt")),
 
-          tags$p(style = "margin-top: 18px; text-align: center; font-size: 12px; color: #7f8c8d;",
-                 if (current_lang() == "es")
-                   "Si no tienes cuenta, solic\u00edtala al administrador."
-                 else
-                   "If you don't have an account, request it from the administrator.")
+          # ---- Solicitud de cuenta (Google Form) ----
+          tags$div(
+            style = "margin-top: 22px; padding-top: 18px; border-top: 1px solid #ecf0f1; text-align: center;",
+            tags$p(
+              style = "margin: 0 0 10px 0; font-size: 13px; color: #7f8c8d;",
+              if (current_lang() == "es")
+                "\u00bfA\u00fan no tienes cuenta?"
+              else
+                "Don't have an account yet?"
+            ),
+            tags$a(
+              href = "https://forms.gle/8hbJyNXyvRKAi9rW8",
+              target = "_blank", rel = "noopener noreferrer",
+              style = paste(
+                "display: inline-block; padding: 10px 20px;",
+                "background: #fff; color: #2980b9;",
+                "border: 2px solid #2980b9; border-radius: 8px;",
+                "font-size: 13px; font-weight: 600; text-decoration: none;",
+                "transition: all 0.2s;"
+              ),
+              onmouseover = "this.style.background='#2980b9'; this.style.color='#fff';",
+              onmouseout = "this.style.background='#fff'; this.style.color='#2980b9';",
+              icon("file-signature"),
+              if (current_lang() == "es")
+                " Solicitar acceso"
+              else
+                " Request access"
+            ),
+            tags$p(
+              style = "margin: 10px 0 0 0; font-size: 11px; color: #95a5a6;",
+              if (current_lang() == "es")
+                "Respuesta en 5 d\u00edas h\u00e1biles"
+              else
+                "Reply within 5 business days"
+            )
+          )
         ),
 
         # Footer
