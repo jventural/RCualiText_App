@@ -14,9 +14,7 @@ plot_codigos <- function(df, fill = TRUE, code_colors = NULL,
   sin_cat_label <- if (!is.null(labels$sin_cat)) labels$sin_cat else "Uncategorized"
   df_counts <- prepare_code_counts(df, fill, sin_cat_label)
 
-  # Fix factor levels globales: ordenar el eje Y por frecuencia TOTAL del codigo
-  # (de menor a mayor al graficar). Sin esto, prepare_code_counts usa factor
-  # levels locales a cada Archivo y plotly duplica codigos en el eje Y.
+  # Factor levels globales: asegurar mismo orden de codigos en todos los facets
   totales <- df_counts %>%
     dplyr::group_by(Codigo) %>%
     dplyr::summarise(total = sum(Frecuencia), .groups = "drop") %>%
@@ -25,43 +23,54 @@ plot_codigos <- function(df, fill = TRUE, code_colors = NULL,
     dplyr::mutate(Codigo = factor(as.character(Codigo),
                                   levels = as.character(totales$Codigo)))
 
-  if (fill && "Archivo" %in% names(df_counts)) {
-    # Stack por Archivo: cada documento (entrevista/persona) es un segmento
-    # de color distinto dentro de la barra total del codigo.
-    p <- plotly::plot_ly(
-      data = df_counts, y = ~Codigo, x = ~Frecuencia, color = ~Archivo,
-      type = "bar", orientation = "h",
-      hovertemplate = paste0("<b>%{y}</b><br>",
-                             labels$freq, ": %{x}<br>",
-                             "Doc: %{fullData.name}<extra></extra>")
-    )
+  # Acortar nombres de Archivo para labels de facets (sin extension y maximo 22 chars)
+  df_counts <- df_counts %>%
+    dplyr::mutate(Archivo_corto = tools::file_path_sans_ext(Archivo),
+                  Archivo_corto = ifelse(nchar(Archivo_corto) > 22,
+                                         paste0(substr(Archivo_corto, 1, 22), "..."),
+                                         Archivo_corto))
+
+  # Construir ggplot con facet_wrap por Archivo, luego convertir a plotly
+  if (fill && "Categoria" %in% names(df_counts)) {
+    g <- ggplot2::ggplot(df_counts,
+                         ggplot2::aes(x = Codigo, y = Frecuencia, fill = Categoria,
+                                      text = paste0("<b>", Codigo, "</b><br>",
+                                                    labels$freq, ": ", Frecuencia,
+                                                    "<br>", labels$cat, ": ", Categoria))) +
+      ggplot2::geom_col()
   } else {
+    g <- ggplot2::ggplot(df_counts,
+                         ggplot2::aes(x = Codigo, y = Frecuencia, fill = Codigo,
+                                      text = paste0("<b>", Codigo, "</b><br>",
+                                                    labels$freq, ": ", Frecuencia))) +
+      ggplot2::geom_col()
     if (!is.null(code_colors)) {
-      df_counts <- df_counts %>% dplyr::mutate(Color = code_colors[as.character(Codigo)])
-      p <- plotly::plot_ly(
-        data = df_counts, y = ~Codigo, x = ~Frecuencia, type = "bar", orientation = "h",
-        text = ~Frecuencia, textposition = "outside",
-        textfont = list(size = 12, color = "#2c3e50", family = "Arial Black"),
-        marker = list(color = ~Color),
-        hovertemplate = paste0("<b>%{y}</b><br>", labels$freq, ": %{x}<extra></extra>")
-      )
+      g <- g + ggplot2::scale_fill_manual(values = code_colors, guide = "none")
     } else {
-      p <- plotly::plot_ly(
-        data = df_counts, y = ~Codigo, x = ~Frecuencia, color = ~Codigo,
-        type = "bar", orientation = "h", text = ~Frecuencia, textposition = "outside",
-        textfont = list(size = 12, color = "#2c3e50", family = "Arial Black"),
-        hovertemplate = paste0("<b>%{y}</b><br>", labels$freq, ": %{x}<extra></extra>")
-      )
+      g <- g + ggplot2::guides(fill = "none")
     }
   }
 
-  p %>% plotly::layout(
-    xaxis = list(title = list(text = labels$freq, font = list(size = 12, family = "sans-serif")), tickfont = list(size = 10)),
-    yaxis = list(title = list(text = labels$codes, font = list(size = 12, family = "sans-serif")), tickfont = list(size = 10), categoryorder = "total ascending"),
-    legend = list(orientation = "h", x = 0.5, xanchor = "center", y = -0.15, font = list(size = 10)),
-    margin = list(l = 120, r = 80, t = 40, b = 80),
-    barmode = "stack", plot_bgcolor = "rgba(0,0,0,0)", paper_bgcolor = "rgba(0,0,0,0)"
-  ) %>% plotly::config(displayModeBar = FALSE)
+  g <- g +
+    ggplot2::coord_flip() +
+    ggplot2::facet_wrap(~ Archivo_corto, ncol = 2, scales = "free_x") +
+    ggplot2::labs(x = labels$codes, y = labels$freq, fill = labels$cat) +
+    ggplot2::theme_minimal(base_size = 11) +
+    ggplot2::theme(
+      strip.text = ggplot2::element_text(size = 10, face = "bold", color = "#2c3e50"),
+      strip.background = ggplot2::element_rect(fill = "#ecf0f1", color = NA),
+      panel.spacing = ggplot2::unit(0.8, "lines"),
+      legend.position = "bottom",
+      axis.text.y = ggplot2::element_text(size = 9),
+      axis.text.x = ggplot2::element_text(size = 9)
+    )
+
+  plotly::ggplotly(g, tooltip = "text") %>%
+    plotly::config(displayModeBar = FALSE) %>%
+    plotly::layout(
+      legend = list(orientation = "h", x = 0.5, xanchor = "center", y = -0.1),
+      margin = list(l = 80, r = 40, t = 40, b = 60)
+    )
 }
 
 #' @title Static code frequency bar chart (ggplot2)
