@@ -7,8 +7,13 @@ library(openxlsx)
 
 OUT_DIR <- "D:/16_Shinys/RCualiText_App/examples"
 
+# IMPORTANTE: validador en app.R linea 5356 espera columnas
+#   "Categoría", "Código", "Definición" (con tildes) -- primario
+#   o "Categoria", "Codigo", "Definicion" (sin tildes) -- alternativo
+#   o "Category", "Code", "Definition" (ingles)       -- alternativo
+# Usamos la forma PRIMARIA con tildes.
 dic <- data.frame(
-  category = c(
+  Categoría = c(
     # Factores personales (3)
     "Factores personales",
     "Factores personales",
@@ -19,7 +24,7 @@ dic <- data.frame(
     # Factores sociales (1)
     "Factores sociales"
   ),
-  code = c(
+  Código = c(
     "Motivacion",
     "Tiempo",
     "Obstaculos",
@@ -27,7 +32,7 @@ dic <- data.frame(
     "Asesor",
     "Apoyo emocional"
   ),
-  definition = c(
+  Definición = c(
     # --- Factores personales ---
     "Razones internas, pasion, vocacion o intereses personales del tesista que lo impulsan a realizar la investigacion. Incluye expresiones sobre que le apasiona el tema, se identifica con el problema, quiere aportar a su campo, o tiene una motivacion etica. Ejemplo: 'elegi este tema porque me duele, tengo familia en zonas rurales sin agua'.",
     "Descripciones sobre como el tesista administra, planifica, pierde o sacrifica el tiempo para avanzar la tesis. Incluye: jornadas dobles, trabajo nocturno, falta de horas, carga horaria, sacrificios de ocio/gimnasio/amigos, percepcion de plazos apretados, cansancio por exceso de horas dedicadas. Ejemplo: 'la tesis la hago de noche y los domingos', 'he vivido a punta de cafe este ultimo anio'.",
@@ -44,8 +49,8 @@ dic <- data.frame(
 # Verificar consistencia con los codigos del demo
 codigos_esperados <- c("Motivacion", "Metodologia", "Asesor",
                        "Tiempo", "Apoyo emocional", "Obstaculos")
-stopifnot(setequal(dic$code, codigos_esperados))
-stopifnot(!any(duplicated(dic$code)))
+stopifnot(setequal(dic[["Código"]], codigos_esperados))
+stopifnot(!any(duplicated(dic[["Código"]])))
 
 # Exportar xlsx con formato
 wb <- createWorkbook()
@@ -67,7 +72,7 @@ cat_colors <- c(
   "Factores sociales"        = "#E8F8F0"
 )
 for (i in seq_len(nrow(dic))) {
-  col <- cat_colors[dic$category[i]]
+  col <- cat_colors[dic[["Categoría"]][i]]
   if (!is.na(col)) {
     rowStyle <- createStyle(fgFill = col, wrapText = TRUE,
                             valign = "top", halign = "left")
@@ -95,8 +100,8 @@ write.table(dic, csv_path, sep = ",", row.names = FALSE,
 cat("Diccionario ALINEADO con el .rds demo:\n")
 cat("  ", xlsx_path, "\n")
 cat("  ", csv_path, "\n")
-cat("\n", nrow(dic), "codigos en", length(unique(dic$category)), "categorias:\n")
-for (c in unique(dic$category)) {
-  codes <- dic$code[dic$category == c]
+cat("\n", nrow(dic), "codigos en", length(unique(dic[["Categoría"]])), "categorias:\n")
+for (c in unique(dic[["Categoría"]])) {
+  codes <- dic[["Código"]][dic[["Categoría"]] == c]
   cat(sprintf("  - %s: %s\n", c, paste(codes, collapse = ", ")))
 }
