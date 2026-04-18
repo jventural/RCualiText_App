@@ -7619,10 +7619,25 @@ server <- function(input, output, session) {
         new_docs <- setdiff(doc_names, existing)
         if (length(new_docs) > 0) {
           new_rows <- tibble(Archivo = new_docs)
+          # Preserve column types of existing rv$descriptores to avoid
+          # bind_rows type-mismatch crash (e.g. integer vs character).
           for (col in setdiff(names(rv$descriptores), "Archivo")) {
-            new_rows[[col]] <- ""
+            existing_col <- rv$descriptores[[col]]
+            # Coerce NA to the same type as the existing column
+            new_rows[[col]] <- as(rep(NA, length(new_docs)), class(existing_col)[1])
           }
-          rv$descriptores <- bind_rows(rv$descriptores, new_rows)
+          rv$descriptores <- tryCatch(
+            bind_rows(rv$descriptores, new_rows),
+            error = function(e) {
+              # Fallback: coerce all non-Archivo columns to character to guarantee a successful merge
+              desc_chr <- rv$descriptores
+              for (col in setdiff(names(desc_chr), "Archivo")) {
+                desc_chr[[col]] <- as.character(desc_chr[[col]])
+                new_rows[[col]] <- as.character(new_rows[[col]])
+              }
+              bind_rows(desc_chr, new_rows)
+            }
+          )
         }
       }
     }
