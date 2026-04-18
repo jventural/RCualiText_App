@@ -3489,53 +3489,82 @@ server <- function(input, output, session) {
   output$dynamic_sidebar <- renderMenu({
     current_lang()
     sidebarMenu(id = "sidebar",
-      menuItem(tr("sidebar.bloque_preparacion"), icon = icon("folder-plus"), startExpanded = TRUE,
+      # --- PASO 1: Corpus (subir datos) ---
+      menuItem(if (current_lang() == "es") "1. Corpus" else "1. Corpus",
+               icon = icon("folder-open"), startExpanded = TRUE,
         menuSubItem(tr("sidebar.documento"), tabName = "texto", icon = icon("file-text")),
+        menuSubItem(if (current_lang() == "es") "Multimedia (audio/video)" else "Multimedia (audio/video)",
+                    tabName = "multimedia", icon = icon("microphone")),
         menuSubItem(tr("sidebar.descriptores"), tabName = "descriptores", icon = icon("id-card")),
         menuSubItem(tr("sidebar.exploracion"), tabName = "exploracion", icon = icon("search"))
       ),
-      menuItem(tr("sidebar.bloque_codificacion"), icon = icon("tags"), startExpanded = FALSE,
+      # --- PASO 2: Sistema de codigos (pre-codificacion) ---
+      menuItem(if (current_lang() == "es") "2. Sistema de codigos" else "2. Code system",
+               icon = icon("tags"), startExpanded = FALSE,
+        menuSubItem(if (current_lang() == "es") "Plantillas" else "Templates",
+                    tabName = "templates", icon = icon("clipboard-list")),
         menuSubItem(tr("sidebar.codigos"), tabName = "codigos", icon = icon("tag")),
         menuSubItem(tr("sidebar.categorias"), tabName = "categorias", icon = icon("folder-open")),
-        menuSubItem(tr("sidebar.extractos"), tabName = "resaltes", icon = icon("highlighter")),
+        menuSubItem(tr("sidebar.codebook"), tabName = "codebook", icon = icon("book"))
+      ),
+      # --- PASO 3: Codificacion ---
+      menuItem(if (current_lang() == "es") "3. Codificacion" else "3. Coding",
+               icon = icon("highlighter"), startExpanded = FALSE,
+        menuSubItem(if (current_lang() == "es") "Codificar fragmentos" else "Code fragments",
+                    tabName = "resaltes", icon = icon("highlighter")),
+        menuSubItem(if (current_lang() == "es") "Codificacion asistida por IA" else "AI-assisted coding",
+                    tabName = "analisis_ia", icon = icon("robot")),
         menuSubItem(tr("sidebar.memos"), tabName = "memos", icon = icon("sticky-note")),
         menuSubItem(tr("sidebar.quotations"), tabName = "quotations", icon = icon("quote-right")),
-        menuSubItem(tr("sidebar.codebook"), tabName = "codebook", icon = icon("book")),
+        menuSubItem(if (current_lang() == "es") "Hyperlinks" else "Hyperlinks",
+                    tabName = "hyperlinks", icon = icon("link")),
         menuSubItem(tr("sidebar.grupos"), tabName = "grupos", icon = icon("layer-group")),
-        menuSubItem(tr("sidebar.research_q"), tabName = "research_q", icon = icon("question"))
+        menuSubItem(if (current_lang() == "es") "Colaboracion" else "Collaboration",
+                    tabName = "collab", icon = icon("users"))
       ),
-      menuItem(tr("sidebar.bloque_analisis"), icon = icon("chart-line"), startExpanded = FALSE,
-        menuSubItem(tr("sidebar.analisis"), tabName = "analisis", icon = icon("chart-bar")),
+      # --- PASO 4: Analisis ---
+      menuItem(if (current_lang() == "es") "4. Analisis" else "4. Analysis",
+               icon = icon("chart-line"), startExpanded = FALSE,
+        menuSubItem(if (current_lang() == "es") "Frecuencias y redes" else "Frequencies and networks",
+                    tabName = "analisis", icon = icon("chart-bar")),
         menuSubItem(tr("sidebar.matricial"), tabName = "matricial", icon = icon("th")),
-        menuSubItem(tr("sidebar.analisis_ia"), tabName = "analisis_ia", icon = icon("robot")),
+        menuSubItem(if (current_lang() == "es") "Query tool" else "Query tool",
+                    tabName = "query", icon = icon("filter")),
+        menuSubItem(if (current_lang() == "es") "Visualizaciones avanzadas" else "Advanced viz",
+                    tabName = "viz_extra", icon = icon("project-diagram")),
         menuSubItem(tr("sidebar.analisis_semantico"), tabName = "analisis_semantico", icon = icon("brain")),
         menuSubItem(tr("sidebar.topic_modeling"), tabName = "topic_modeling", icon = icon("lightbulb")),
         menuSubItem(tr("sidebar.sentiment"), tabName = "sentiment", icon = icon("heart")),
         menuSubItem(tr("sidebar.ner"), tabName = "ner", icon = icon("user-tag")),
-        menuSubItem(tr("sidebar.reliability"), tabName = "reliability", icon = icon("check-double"))
+        menuSubItem(if (current_lang() == "es") "Estadistica mixta" else "Mixed statistics",
+                    tabName = "mixed_stats", icon = icon("chart-pie")),
+        menuSubItem(tr("sidebar.reliability"), tabName = "reliability", icon = icon("check-double")),
+        menuSubItem(tr("sidebar.research_q"), tabName = "research_q", icon = icon("question"))
       ),
-      menuItem(tr("sidebar.bloque_salida"), icon = icon("share-square"), startExpanded = FALSE,
-        menuSubItem(tr("sidebar.audit"), tabName = "audit", icon = icon("history")),
+      # --- PASO 5: Salida ---
+      menuItem(if (current_lang() == "es") "5. Salida" else "5. Output",
+               icon = icon("share-square"), startExpanded = FALSE,
         menuSubItem(tr("sidebar.reporte_ia"), tabName = "reporte_ia", icon = icon("file-alt")),
         menuSubItem(tr("sidebar.proyecto"), tabName = "estado", icon = icon("save")),
-        menuSubItem(tr("sidebar.citar"), tabName = "citar", icon = icon("quote-right")),
-        menuSubItem(tr("sidebar.ayuda"), tabName = "info", icon = icon("info-circle"))
+        menuSubItem(tr("sidebar.citar"), tabName = "citar", icon = icon("quote-right"))
       ),
-      menuItem("Pro features", icon = icon("gem"), startExpanded = FALSE,
-        menuSubItem("Multimedia (Whisper/OCR)", tabName = "multimedia", icon = icon("microphone")),
-        menuSubItem("Collaboration", tabName = "collab", icon = icon("users")),
-        menuSubItem("Query tool", tabName = "query", icon = icon("filter")),
-        menuSubItem("Advanced viz", tabName = "viz_extra", icon = icon("project-diagram")),
-        menuSubItem("Hyperlinks", tabName = "hyperlinks", icon = icon("link")),
-        menuSubItem("Versioning", tabName = "versioning", icon = icon("code-branch")),
-        menuSubItem("Performance", tabName = "performance", icon = icon("tachometer-alt")),
-        menuSubItem("Mixed statistics", tabName = "mixed_stats", icon = icon("chart-pie")),
-        menuSubItem("Templates", tabName = "templates", icon = icon("clipboard-list")),
-        menuSubItem("UX / Shortcuts", tabName = "ux_enhance", icon = icon("keyboard"))
+      # --- HERRAMIENTAS (meta-funciones) ---
+      menuItem(if (current_lang() == "es") "Herramientas" else "Tools",
+               icon = icon("toolbox"), startExpanded = FALSE,
+        menuSubItem(if (current_lang() == "es") "Versionado / Auto-save" else "Versioning / Auto-save",
+                    tabName = "versioning", icon = icon("code-branch")),
+        menuSubItem(tr("sidebar.audit"), tabName = "audit", icon = icon("history")),
+        menuSubItem(if (current_lang() == "es") "Performance" else "Performance",
+                    tabName = "performance", icon = icon("tachometer-alt")),
+        menuSubItem(if (current_lang() == "es") "UX / Atajos" else "UX / Shortcuts",
+                    tabName = "ux_enhance", icon = icon("keyboard"))
       ),
+      # --- AYUDA ---
+      menuItem(tr("sidebar.ayuda"), tabName = "info", icon = icon("info-circle")),
       # --- Admin: solo visible si el usuario tiene rol=admin ---
       if (!is.null(rv$current_user) && isTRUE(rv$current_user$rol == "admin"))
-        menuItem("Administracion", tabName = "admin",
+        menuItem(if (current_lang() == "es") "Administracion" else "Administration",
+                 tabName = "admin",
                  icon = icon("user-shield"), startExpanded = FALSE)
     )
   })
