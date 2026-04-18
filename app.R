@@ -5187,6 +5187,9 @@ server <- function(input, output, session) {
         audit_log = rv$audit_log,
         bookmarks = rv$bookmarks,
         research_questions = rv$research_questions,
+        # Plantillas (Analysis Templates) — persisten entre sesiones
+        active_template = rv$active_template,
+        template_progress = rv$template_progress,
         # Metadatos
         version = paste0(APP_VERSION, "_con_visualizacion"),
         metadata = list(
